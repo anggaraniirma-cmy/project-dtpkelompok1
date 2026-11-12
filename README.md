@@ -63,6 +63,20 @@ tests/                   87 test otomatis
 
 Butuh **Python 3.11** dan webcam.
 
+### Cara tercepat (Windows)
+
+Klik dua kali **`start.bat`** di folder proyek. Skrip itu akan:
+
+1. memeriksa `.venv` dan model MediaPipe (mengunduh model bila hilang),
+2. mengetes kamera dan memberi tahu bila tidak terdeteksi,
+3. menjalankan ketiga service sekaligus dan mencetak URL-nya.
+
+Biarkan jendelanya terbuka selama pameran. Untuk menghentikan semuanya
+(kamera ikut dilepas): **Ctrl+C** di jendela itu, atau klik dua kali **`stop.bat`**
+berguna bila jendela sudah terlanjur tertutup tapi port masih dipakai.
+
+### Cara manual (semua OS)
+
 ```bash
 # 1. virtualenv
 python -m venv .venv

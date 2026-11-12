@@ -107,8 +107,8 @@ def serve(which: str, port: int | None = None, api_url: str = "http://localhost:
 
     srv = ThreadingServer(("127.0.0.1", actual), Handler)
     label = "Admin Panel" if which == "admin" else "Visitor/Game Panel"
-    print(f"  {label:<20} -> http://localhost:{actual}" +
-          (f"  (port {wanted} terpakai)" if actual != wanted else ""))
+    print(f"  {label:<20} -> http://localhost:{actual}  (API {api_url})" +
+          (f"  [port {wanted} terpakai]" if actual != wanted else ""), flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
