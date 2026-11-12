@@ -40,6 +40,16 @@ QUIZ_LENGTH = int(os.getenv("SKOMDA_QUIZ_LENGTH", "5"))
 DEFAULT_DURATION = int(os.getenv("SKOMDA_DEFAULT_DURATION", "30"))
 POIN_BENAR = 10
 
+# Jeda (detik) antara "waktu habis / jawaban dicatat" dan soal berikutnya,
+# ditegakkan server-side oleh GameEngine.tick() sehingga browser yang menutup
+# tab tidak membuat sesi menggantung.
+AUTO_ADVANCE_GRACE = float(os.getenv("SKOMDA_ADVANCE_GRACE", "2.0"))
+
+# Bila soal sudah lewat waktu selama ini (detik), dianggap pengunjung
+# meninggalkan kios: sesi ditutup sebagai "dibatalkan" agar tidak ada sesi
+# "berjalan" yang menggantung selamanya di database.
+SESI_TELANTAR_DETIK = float(os.getenv("SKOMDA_ABANDON_AFTER", "120"))
+
 # --- Computer vision -----------------------------------------------------
 CAMERA_INDEX = int(os.getenv("SKOMDA_CAM_INDEX", "0"))
 CAMERA_WIDTH = int(os.getenv("SKOMDA_CAM_WIDTH", "640"))

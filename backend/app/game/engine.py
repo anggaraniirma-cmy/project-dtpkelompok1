@@ -31,6 +31,10 @@ class SoalSesi:
     durasi: int
     mulai: float = field(default_factory=time.monotonic)
 
+    def kedaluwarsa(self) -> bool:
+        """Waktu soal habis menurut jam server (bukan timer di browser)."""
+        return (time.monotonic() - self.mulai) >= self.durasi
+
 
 @dataclass
 class Sesi:
@@ -54,6 +58,11 @@ class Sesi:
             return 0.0
         return max(0.0, s.durasi - (time.monotonic() - s.mulai))
 
+    def kedaluwarsa(self) -> bool:
+        """True bila waktu soal habis (dihitung dari jam server, bukan browser)."""
+        s = self.soal
+        return s is not None and s.kedaluwarsa()
+
 
 class GameEngine:
     """Menyimpan satu sesi aktif (kios pameran dengan satu kamera)."""
@@ -61,6 +70,8 @@ class GameEngine:
     def __init__(self):
         self._sesi: Optional[Sesi] = None
         self._last_reset = 0.0
+        # Waktu monotonic kapan tick() boleh memajukan soal, atau None.
+        self._pending_advance_at: Optional[float] = None
 
     # -- query -------------------------------------------------------------
     @property
@@ -106,6 +117,7 @@ class GameEngine:
         sesi.soals[0].mulai = time.monotonic()
         self._sesi = sesi
         self._last_reset = time.monotonic()
+        self._pending_advance_at = None
         with database.get_conn() as conn:
             conn.execute(
                 "INSERT INTO sesi_permainan (id, total_soal, benar, skor, status, started_at)"
@@ -130,7 +142,12 @@ class GameEngine:
 
     # -- gameplay ----------------------------------------------------------
     def submit(self, pilihan: str, sumber: str = "gesture") -> dict[str, Any]:
-        """Catat jawaban untuk soal aktif. Melempar ValueError bila tidak sah."""
+        """Catat jawaban untuk soal aktif. Melempar ValueError bila tidak sah.
+
+        Waktu diperiksa di server: jawaban yang datang setelah durasi soal habis
+        ditolak (dicatat sebagai timeout) supaya browser tidak bisa mengakali
+        timer dengan menahan request.
+        """
         sesi = self._sesi
         if sesi is None:
             raise ValueError("Belum ada permainan yang berjalan")
@@ -144,8 +161,14 @@ class GameEngine:
             raise ValueError("Pilihan jawaban tidak valid")
 
         # Satu jawaban per soal -> mencegah duplikat meski ada dua request.
-        if any(r["urutan"] == sesi.indeks for r in sesi.riwayat):
+        if self._sudah_dijawab(sesi):
             raise ValueError("Soal ini sudah dijawab")
+
+        if soal.kedaluwarsa():
+            # Tandai sebagai timeout sekali, lalu tolak jawaban ini.
+            self.timeout()
+            self._pending_advance_at = time.monotonic() + config.AUTO_ADVANCE_GRACE
+            raise ValueError("Waktu soal sudah habis")
 
         waktu_pakai = round(time.monotonic() - soal.mulai, 2)
         benar = pilihan == soal.jawaban
@@ -179,13 +202,35 @@ class GameEngine:
                 (sesi.id, soal.id, sesi.indeks, pilihan, int(benar), waktu_pakai,
                  database.now_iso()),
             )
+
+        # Jadwalkan perpindahan soal di server. Browser biasanya memanggil
+        # /next lebih dulu (feedback 1,9 detik); jadwal ini hanya jaring
+        # pengaman bila tab pengunjung ditutup atau JS berhenti.
+        self._pending_advance_at = time.monotonic() + config.AUTO_ADVANCE_GRACE
         return entry
 
     def next_question(self) -> dict[str, Any]:
-        """Majukan ke soal berikutnya atau selesaikan sesi."""
+        """Majukan ke soal berikutnya atau selesaikan sesi.
+
+        Invarian penting: soal hanya boleh ditinggalkan setelah jawabannya
+        TERCATAT (dijawab, timeout, atau dibatalkan). Aturan ini membuat
+        pemanggilan ganda aman — bila tick() server sudah memajukan soal dan
+        browser juga memanggil /next, panggilan kedua tidak melompati soal.
+        """
         sesi = self._sesi
         if sesi is None:
             raise ValueError("Belum ada permainan yang berjalan")
+        if sesi.status != "berjalan":
+            # Sesi sudah selesai (mis. tick() server mendahului browser).
+            # Kembalikan hasil akhir, bukan error 400, supaya UI bisa menutup
+            # permainan dengan rapi.
+            return {"status": "selesai", "hasil": self.result()}
+
+        if not self._sudah_dijawab(sesi):
+            # Soal aktif belum dijawab: jangan maju, cukup kembalikan state.
+            return {"status": "berjalan", "hasil": None, "diabaikan": True}
+
+        self._pending_advance_at = None
         sesi.indeks += 1
         if sesi.indeks >= len(sesi.soals):
             self._finish(sesi, "selesai")
@@ -198,7 +243,7 @@ class GameEngine:
         sesi = self._sesi
         if sesi is None or sesi.status != "berjalan":
             raise ValueError("Tidak ada soal aktif")
-        if not any(r["urutan"] == sesi.indeks for r in sesi.riwayat):
+        if not self._sudah_dijawab(sesi):
             soal = sesi.soal
             entry = {
                 "urutan": sesi.indeks, "pertanyaan_id": soal.id,
@@ -215,6 +260,62 @@ class GameEngine:
                     (sesi.id, soal.id, sesi.indeks, float(soal.durasi), database.now_iso()),
                 )
         return {"status": "berjalan"}
+
+    @staticmethod
+    def _sudah_dijawab(sesi: Sesi) -> bool:
+        return any(r["urutan"] == sesi.indeks for r in sesi.riwayat)
+
+    def tick(self) -> Optional[dict[str, Any]]:
+        """Detak server-side: batas waktu & maju otomatis tanpa bantuan browser.
+
+        Dipanggil berkala oleh WebSocket status dan endpoint /api/game/state.
+        Tanpa ini, sesi bisa menggantung bila tab pengunjung ditutup atau timer
+        di browser tidak pernah jalan.
+
+        Catch-up: satu panggilan memproses SEMUA soal yang sudah kedaluwarsa,
+        bukan hanya satu. Tanpa ini, pengunjung yang pergi 2 menit dengan timer
+        5 detik meninggalkan antrean timeout yang butuh banyak polling.
+
+        Mengembalikan event (atau None) berisi apa yang PALING AKHIR terjadi:
+          {"event": "timeout", ...}  -> waktu habis, jawaban dicatat kosong
+          {"event": "selesai", ...}  -> soal terakhir lewat, hasil tersedia
+          {"event": "berjalan", ...} -> lanjut ke soal berikutnya
+        Field "timeout_count" menandai berapa soal yang habis dalam catch-up.
+        """
+        sesi = self._sesi
+        if sesi is None or sesi.status != "berjalan":
+            return None
+        soal = sesi.soal
+        if soal is None:
+            return None
+        now = time.monotonic()
+        lewat = (now - soal.mulai) - soal.durasi
+
+        # 0) Ditinggal terlalu lama: catat timeout lalu tutup sesi sebagai
+        #    "dibatalkan". Tanpa ini sesi "berjalan" menggantung di database.
+        if lewat >= config.SESI_TELANTAR_DETIK and not self._sudah_dijawab(sesi):
+            self.timeout()
+            self._finish(sesi, "dibatalkan")
+            self._pending_advance_at = None
+            return {"event": "selesai", "dibatalkan": True,
+                    "hasil": self.result()}
+
+        # 1) Waktu soal habis dan belum dijawab -> catat timeout sekali.
+        if lewat >= 0 and not self._sudah_dijawab(sesi):
+            self.timeout()
+            self._pending_advance_at = now + config.AUTO_ADVANCE_GRACE
+            return {"event": "timeout", "nomor": sesi.indeks + 1,
+                    "total_soal": len(sesi.soals), "skor": sesi.skor}
+
+        # 2) Sudah dijawab / sudah timeout: maju setelah jeda feedback lewat.
+        if self._pending_advance_at is not None and now >= self._pending_advance_at:
+            self._pending_advance_at = None
+            res = self.next_question()
+            if res["status"] == "selesai":
+                return {"event": "selesai", "hasil": res["hasil"]}
+            return {"event": "berjalan", "state": self.public_state()}
+
+        return None
 
     # -- view --------------------------------------------------------------
     def public_state(self) -> dict[str, Any]:

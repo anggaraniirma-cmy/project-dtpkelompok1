@@ -421,6 +421,40 @@ function handleStatus(msg) {
       state.deadline = performance.now() + serverLeft * 1000;
     }
   }
+
+  // Event server-side: sumber kebenaran untuk timeout & perpindahan soal.
+  // Browser tetap punya timer sendiri untuk tampilan, tetapi bila tab ditutup
+  // atau diblokir, server yang memutuskan dan mengabari saat tersambung lagi.
+  if (msg.game_event) handleGameEvent(msg.game_event);
+}
+
+function handleGameEvent(ev) {
+  if (ev.event === 'timeout') {
+    if (state.answered) return;
+    state.answered = true;
+    clearInterval(state.timerHandle);
+    showFeedback({
+      benar: false,
+      jawaban: null,
+      jawaban_benar: null,
+      poin: 0,
+      skor: ev.skor,
+      penjelasan: 'Waktu habis! Soal dilewati.',
+    }, true);
+    return;
+  }
+
+  if (ev.event === 'berjalan' && ev.state) {
+    // Server sudah memajukan soal; tampilkan tanpa memanggil /next lagi.
+    state.answered = false;
+    state.game = ev.state;
+    if (ev.state.soal) renderQuestion(ev.state);
+    return;
+  }
+
+  if (ev.event === 'selesai') {
+    finishGame(ev.hasil);
+  }
 }
 
 /* --------------------------------------------------------------- manual opt */

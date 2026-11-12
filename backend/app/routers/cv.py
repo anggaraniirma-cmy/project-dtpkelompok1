@@ -157,15 +157,21 @@ def _apply_gesture(gesture: str) -> Optional[dict]:
 @router.websocket("/ws")
 async def ws_status(websocket: WebSocket):
     await websocket.accept()
-    last_question = None
     try:
         while True:
             if _pipeline is None:
-                await websocket.send_text(json.dumps({"tipe": "offline"}))
+                # Kamera belum aktif: tetap jalankan tick agar sesi tidak
+                # menggantung bila kamera gagal dinyalakan.
+                ev = engine.tick()
+                payload: dict = {"tipe": "offline"}
+                if ev:
+                    payload["game_event"] = ev
+                await websocket.send_text(json.dumps(payload))
                 await asyncio.sleep(0.4)
                 continue
 
             st = _pipeline.status()
+            event = engine.tick()
             payload = {
                 "tipe": "status",
                 "kamera": st,
@@ -196,6 +202,11 @@ async def ws_status(websocket: WebSocket):
                     }
                 else:
                     payload["diabaikan"] = "Tidak ada soal aktif / soal sudah dijawab"
+
+            # Event dari tick: timeout / lanjut / selesai. Dikirim setelah gesture
+            # diproses supaya jawaban yang sah tetap menang atas timeout.
+            if event:
+                payload["game_event"] = event
 
             await websocket.send_text(json.dumps(payload))
             await asyncio.sleep(0.1)

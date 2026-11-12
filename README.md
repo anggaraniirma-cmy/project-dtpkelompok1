@@ -134,6 +134,46 @@ lalu cooldown 1,5 detik dan latch sampai tangan dilepas. Gesture di luar aturan
 
 Angka-angka ini bisa diubah panitia di **Pengaturan** tanpa menyentuh kode.
 
+### Kalibrasi ambang dengan tangan nyata
+
+Ambang bawaan diturunkan dari geometri tangan, bukan dari data lapangan. Untuk
+menyetelnya ke tangan dan kamera pameran yang sebenarnya:
+
+```bash
+# 1. rekam sampel (jendela kamera muncul; tekan A/B/C/D beberapa kali)
+.venv/Scripts/python.exe tests/record_gesture_samples.py
+
+# 2. analisis sebaran → usulan ambang + laporan celah antar kelas
+.venv/Scripts/python.exe scripts/analyze_calibration.py samples-20260101-1200.jsonl
+```
+
+Skrip analisis melaporkan persentil rasio & kelurusan per jari untuk kelas
+"terangkat" vs "terlipat", akurasi ambang yang sedang dipakai pada data Anda,
+dan memberi tahu bila kelasnya **tidak** terpisah bersih (mis. label tertukar
+atau sudut kamera kurang tepat) — bukan memaksakan ambang yang terlihat bagus.
+
+---
+
+## Waktu & sesi (server-side)
+
+Semua keputusan waktu diambil dari jam server (`time.monotonic`), bukan timer
+JavaScript:
+
+- Jawaban yang datang setelah durasi soal habis **ditolak** dan dicatat timeout.
+- Worker di `lifespan` berdetak tiap detik: mencatat timeout, memajukan soal,
+  dan menyelesaikan permainan tanpa perlu browser.
+- `/next` diabaikan bila soal aktif belum dijawab, sehingga klik ganda tidak
+  melompati soal.
+- Sesi yang ditinggal lebih dari `SKOMDA_ABANDON_AFTER` detik (default 120)
+  ditutup sebagai `dibatalkan`, tidak menggantung selamanya.
+
+Bila ada sesi lama yang terlanjur menggantung:
+
+```bash
+.venv/Scripts/python.exe scripts/bersihkan_sesi.py           # lihat
+.venv/Scripts/python.exe scripts/bersihkan_sesi.py --apply   # tutup
+```
+
 ---
 
 ## Pengaturan panitia (panel admin)
@@ -152,7 +192,7 @@ dibaca ulang saat kamera dinyalakan, jadi perubahan berlaku pada sesi berikutnya
 ## Pengujian
 
 ```bash
-.venv/Scripts/python.exe -m pytest -q            # 87 test, tanpa kamera
+.venv/Scripts/python.exe -m pytest -q            # 95 test, tanpa kamera
 .venv/Scripts/python.exe tests/manual_camera_check.py         # kamera nyata
 .venv/Scripts/python.exe tests/manual_camera_check.py --gui   # dengan jendela
 ```
@@ -160,7 +200,7 @@ dibaca ulang saat kamera dinyalakan, jadi perubahan berlaku pada sesi berikutnya
 Cakupan otomatis: klasifikasi A–D (termasuk skala 0,7–1,5× dan rotasi ±25°),
 penolakan gesture tak valid, stabilisasi/cooldown/jitter, autentikasi & otorisasi
 admin, CRUD soal, validasi input, alur permainan penuh, jawaban ganda, timeout,
-pengaturan, ganti password.
+batas waktu server-side & pembatalan sesi telantar, pengaturan, ganti password.
 
 `manual_camera_check.py` melaporkan apa adanya: bila tidak ada tangan di depan
 kamera, statusnya "TIDAK ADA TANGAN TERDETEKSI" — bukan klaim berhasil.
@@ -178,6 +218,8 @@ kamera, statusnya "TIDAK ADA TANGAN TERDETEKSI" — bukan klaim berhasil.
 | `SKOMDA_CAM_INDEX` | `0` | index webcam |
 | `SKOMDA_ALLOW_MANUAL_ANSWER` | `1` | `0` = jawaban murni gesture |
 | `SKOMDA_ALLOW_FEED` | `0` | `1` = endpoint injeksi gesture untuk demo |
+| `SKOMDA_ADVANCE_GRACE` | `2.0` | jeda feedback sebelum soal berikutnya (detik) |
+| `SKOMDA_ABANDON_AFTER` | `120` | sesi ditutup bila ditinggal selama ini (detik) |
 
 > **Sebelum pameran:** ganti password default lewat menu Pengaturan.
 

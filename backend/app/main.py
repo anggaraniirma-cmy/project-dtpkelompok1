@@ -7,6 +7,7 @@ CORS dikunci ke origin kedua frontend tersebut.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -15,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import __version__, config, database
+from .game import engine
 from .routers import admin, auth, cv, game
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -26,12 +28,41 @@ async def lifespan(app: FastAPI):
     database.init_db()
     log.info("Database siap: %s", config.get_db_path())
     log.info("Model MediaPipe: %s", config.MODEL_PATH)
-    yield
-    # Pastikan kamera dilepas saat server berhenti.
-    pipe = cv.get_pipeline()
-    if pipe is not None:
-        pipe.close()
-        log.info("Kamera dilepas")
+
+    # Worker waktu permainan: tanpa ini, sesi hanya "tick" ketika ada klien
+    # yang memanggil /state atau WebSocket. Bila tab pengunjung ditutup, sesi
+    # akan menggantung. Worker ini memastikan batas waktu & pembatalan sesi
+    # telantar tetap berjalan selama backend hidup.
+    stop_event = asyncio.Event()
+
+    async def waktu_worker() -> None:
+        while not stop_event.is_set():
+            try:
+                ev = engine.tick()
+                if ev:
+                    log.info("game tick: %s", ev.get("event"))
+            except Exception:
+                log.exception("game tick gagal")
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=1.0)
+            except asyncio.TimeoutError:
+                pass
+
+    worker = asyncio.create_task(waktu_worker())
+    try:
+        yield
+    finally:
+        stop_event.set()
+        worker.cancel()
+        try:
+            await worker
+        except (asyncio.CancelledError, Exception):
+            pass
+        # Pastikan kamera dilepas saat server berhenti.
+        pipe = cv.get_pipeline()
+        if pipe is not None:
+            pipe.close()
+            log.info("Kamera dilepas")
 
 
 app = FastAPI(

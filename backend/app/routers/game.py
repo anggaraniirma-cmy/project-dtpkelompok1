@@ -41,11 +41,16 @@ def start(payload: StartPayload | None = None):
 
 @router.get("/state")
 def state():
+    # Tick juga di sini, supaya sesi tetap berjalan bila pengunjung menutup
+    # WebSocket tetapi masih polling state.
+    event = engine.tick()
     data = engine.public_state()
     if data.get("aktif") and data.get("status") == "berjalan":
         sisa = engine.sesi.sisa_waktu() if engine.sesi else 0.0
         data["sisa_waktu"] = round(sisa, 1)
         data["kadaluarsa"] = sisa <= 0
+    if event:
+        data["game_event"] = event
     return data
 
 
@@ -73,11 +78,15 @@ def next_question():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     out: dict[str, Any] = {"lanjut": res["status"]}
     if res["status"] == "selesai":
-        out["hasil"] = engine.result()
+        out["hasil"] = res.get("hasil") or engine.result()
         out["state"] = engine.public_state()
     else:
-        st = engine.public_state()
-        out["state"] = st
+        # Selalu sertakan state, termasuk saat permintaan diabaikan (soal belum
+        # dijawab / server sudah memajukan lebih dulu) agar UI tidak merusak
+        # tampilan dengan state kosong.
+        out["state"] = engine.public_state()
+        if res.get("diabaikan"):
+            out["diabaikan"] = True
     return out
 
 
