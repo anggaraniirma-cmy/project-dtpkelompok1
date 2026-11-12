@@ -44,3 +44,33 @@ class AnswerPayload(BaseModel):
 
 class StartPayload(BaseModel):
     jumlah_soal: int | None = Field(default=None, ge=1, le=20)
+
+
+class PengaturanPayload(BaseModel):
+    """Sebagian atau semua pengaturan permainan (panel admin)."""
+
+    jumlah_soal: int | None = Field(default=None, ge=1, le=20)
+    durasi_default: int | None = Field(default=None, ge=5, le=180)
+    hold_detik: float | None = Field(default=None, ge=0.6, le=3.0)
+    cooldown_detik: float | None = Field(default=None, ge=0.5, le=5.0)
+
+    def terisi(self) -> dict[str, float | int]:
+        return {k: v for k, v in self.model_dump().items() if v is not None}
+
+
+class PasswordPayload(BaseModel):
+    """Ganti password admin: wajib menyertakan password lama."""
+
+    password_lama: str = Field(min_length=1, max_length=128)
+    password_baru: str = Field(min_length=8, max_length=128)
+
+    @field_validator("password_baru")
+    @classmethod
+    def _kuat(cls, v: str) -> str:
+        if v.strip() != v:
+            raise ValueError("Password tidak boleh diawali/diakhiri spasi")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password baru harus mengandung minimal satu angka")
+        if not any(c.isalpha() for c in v):
+            raise ValueError("Password baru harus mengandung minimal satu huruf")
+        return v

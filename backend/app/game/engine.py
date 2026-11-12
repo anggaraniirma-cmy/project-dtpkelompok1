@@ -75,7 +75,8 @@ class GameEngine:
 
     # -- lifecycle ---------------------------------------------------------
     def start(self, jumlah_soal: Optional[int] = None) -> Sesi:
-        jumlah = jumlah_soal or config.QUIZ_LENGTH
+        pengaturan = database.get_pengaturan()
+        jumlah = jumlah_soal or int(pengaturan["jumlah_soal"])
         with database.get_conn() as conn:
             rows = conn.execute(
                 "SELECT * FROM pertanyaan WHERE aktif = 1 ORDER BY RANDOM() LIMIT ?",

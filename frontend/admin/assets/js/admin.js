@@ -122,6 +122,7 @@ async function enterApp() {
   $('#sbAvatar').textContent = (me.nama || me.username || 'P').charAt(0).toUpperCase();
   checkApi();
   loadDashboard();
+  loadSettings();   // supaya durasi bawaan soal baru sudah benar sebelum form dibuka
 }
 
 async function checkApi() {
@@ -143,6 +144,7 @@ const VIEW_META = {
   questions: ['Bank Pertanyaan', 'Kelola semua soal yang dipakai di panel pengunjung'],
   editor: ['Tambah Pertanyaan', 'Buat atau ubah soal beserta kunci jawabannya'],
   sessions: ['Riwayat Sesi', 'Hasil permainan pengunjung yang tersimpan'],
+  settings: ['Pengaturan', 'Atur jalannya permainan dan keamanan akun panitia'],
 };
 
 function goTo(view) {
@@ -157,6 +159,7 @@ function goTo(view) {
   if (view === 'dashboard') loadDashboard();
   if (view === 'questions') loadQuestions();
   if (view === 'sessions') loadSessions();
+  if (view === 'settings') loadSettings();
   if (view === 'editor' && !state.editingId) resetForm();
 }
 
@@ -261,7 +264,8 @@ function resetForm() {
   state.editingId = null;
   $('#questionForm').reset();
   $('#fKategori').value = 'Umum';
-  $('#fDurasi').value = 30;
+  // Durasi bawaan mengikuti pengaturan panitia (bukan angka keras 30).
+  $('#fDurasi').value = settingsDefaults ? settingsDefaults.durasi_default : 30;
   $('#fAktif').checked = true;
   $('#switchAktif').setAttribute('aria-checked', 'true');
   $('#switchLabel').textContent = 'Aktif';
@@ -397,6 +401,129 @@ async function confirmDelete() {
   }
 }
 
+/* --------------------------------------------------------------- settings */
+let settingsDefaults = null;
+
+async function loadSettings() {
+  try {
+    const d = await api('/api/admin/pengaturan');
+    settingsDefaults = d.default;
+    const v = d.nilai;
+    $('#setJumlah').value = v.jumlah_soal;
+    $('#setDurasi').value = v.durasi_default;
+    $('#setHold').value = v.hold_detik;
+    $('#setCooldown').value = v.cooldown_detik;
+    // Batas dari backend dipasang ke input supaya form tidak bisa diisi
+    // nilai yang pasti ditolak server.
+    Object.entries(d.batas).forEach(([kunci, b]) => {
+      const map = { jumlah_soal: '#setJumlah', durasi_default: '#setDurasi',
+                    hold_detik: '#setHold', cooldown_detik: '#setCooldown' };
+      const el = $(map[kunci]);
+      if (el) { el.min = b.min; el.max = b.max; }
+    });
+    setSettingsBadge('TERSIMPAN');
+    loadSystemInfo();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+function setSettingsBadge(text) {
+  const el = $('#settingsBadge');
+  if (!el) return;
+  el.textContent = text;
+  el.style.background = text === 'TERSIMPAN' ? 'var(--ok-tint)' : 'var(--red-tint)';
+  el.style.color = text === 'TERSIMPAN' ? 'var(--ok)' : 'var(--red)';
+}
+
+async function saveSettings(e) {
+  e.preventDefault();
+  const payload = {
+    jumlah_soal: parseInt($('#setJumlah').value, 10),
+    durasi_default: parseInt($('#setDurasi').value, 10),
+    hold_detik: parseFloat($('#setHold').value),
+    cooldown_detik: parseFloat($('#setCooldown').value),
+  };
+  const btn = $('#btnSaveSettings');
+  btn.disabled = true;
+  try {
+    const res = await api('/api/admin/pengaturan', {
+      method: 'PUT', body: JSON.stringify(payload),
+    });
+    const v = res.nilai;
+    $('#setJumlah').value = v.jumlah_soal;
+    $('#setDurasi').value = v.durasi_default;
+    $('#setHold').value = v.hold_detik;
+    $('#setCooldown').value = v.cooldown_detik;
+    setSettingsBadge('TERSIMPAN');
+    toast('Pengaturan tersimpan permanen.', false);
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function resetSettings() {
+  if (!settingsDefaults) return;
+  $('#setJumlah').value = settingsDefaults.jumlah_soal;
+  $('#setDurasi').value = settingsDefaults.durasi_default;
+  $('#setHold').value = settingsDefaults.hold_detik;
+  $('#setCooldown').value = settingsDefaults.cooldown_detik;
+  setSettingsBadge('BELUM DISIMPAN');
+  toast('Nilai awal dimuat. Tekan Simpan untuk menerapkan.', false);
+}
+
+async function loadSystemInfo() {
+  $('#infoApi').textContent = API.replace(/^https?:\/\//, '');
+  try {
+    const h = await fetchHealth();
+    $('#infoDb').textContent = h.database || '—';
+    $('#infoCam').textContent = h.kamera ? 'Aktif' : 'Standby';
+    $('#infoVer').textContent = h.versi || '—';
+  } catch (_) {
+    $('#infoDb').textContent = '—';
+    $('#infoCam').textContent = 'Tidak terhubung';
+  }
+}
+
+async function fetchHealth() {
+  const res = await fetch(API + '/api/health');
+  if (!res.ok) throw new Error('health gagal');
+  return res.json();
+}
+
+async function savePassword(e) {
+  e.preventDefault();
+  const lama = $('#pwLama').value;
+  const baru = $('#pwBaru').value;
+  const ulang = $('#pwUlang').value;
+
+  if (baru !== ulang) {
+    toast('Konfirmasi password baru tidak sama.');
+    return;
+  }
+  if (!/[A-Za-z]/.test(baru) || !/\d/.test(baru)) {
+    toast('Password baru harus mengandung huruf dan angka.');
+    return;
+  }
+
+  const btn = $('#btnSavePassword');
+  btn.disabled = true;
+  try {
+    await api('/api/admin/password', {
+      method: 'POST',
+      body: JSON.stringify({ password_lama: lama, password_baru: baru }),
+    });
+    $('#passwordForm').reset();
+    toast('Password berhasil diperbarui.', false);
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 /* ---------------------------------------------------------------- sessions */
 async function loadSessions() {
   try {
@@ -471,6 +598,13 @@ function bind() {
 
   // editor
   $('#questionForm').addEventListener('submit', saveQuestion);
+  $('#settingsForm').addEventListener('submit', saveSettings);
+  $('#btnResetSettings').addEventListener('click', resetSettings);
+  $('#passwordForm').addEventListener('submit', savePassword);
+  ['setJumlah', 'setDurasi', 'setHold', 'setCooldown'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => setSettingsBadge('BELUM DISIMPAN'));
+  });
   $('#btnCancel').addEventListener('click', () => { resetForm(); goTo('questions'); });
   $('#btnResetForm').addEventListener('click', resetForm);
   $('#switchAktif').addEventListener('click', () => {

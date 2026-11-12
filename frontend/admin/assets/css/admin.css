@@ -292,6 +292,10 @@ body {
 .sc-sub { font-size: 10.5px; color: var(--slate); }
 
 .dash-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 14px; }
+/* Grid/flex item tanpa min-width:0 memakai min-content anaknya. Teks soal yang
+   panjang (nowrap) membuat kartu melebar melewati layar di 390px. */
+.dash-grid > *, .settings-grid > *, .editor-grid > * { min-width: 0; }
+.card { min-width: 0; }
 
 /* bars */
 .bars { display: grid; gap: 11px; }
@@ -308,7 +312,9 @@ body {
 .empty { font-size: 12px; color: var(--slate-400); text-align: center; padding: 22px 0; }
 
 /* activity */
-.activity { display: grid; gap: 2px; }
+/* grid-template-columns minmax(0,1fr): tanpa ini, teks .act-txt yang nowrap
+   menentukan lebar kolom (min-content) dan kartu melebar di layar sempit. */
+.activity { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
 .act-row {
   display: flex; align-items: center; gap: 11px; padding: 9px 0;
   border-bottom: 1px dashed var(--line); font-size: 12px;
@@ -527,12 +533,49 @@ body {
 .toast.is-show { opacity: 1; transform: none; }
 .toast.is-error { background: var(--red); }
 
+/* -------------------------------------------------------------- settings */
+.settings-grid { display: grid; grid-template-columns: 1fr 360px; gap: 14px; align-items: start; }
+.settings-side { display: flex; flex-direction: column; gap: 14px; }
+
+.set-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  padding: 14px 0; border-bottom: 1px solid var(--line);
+}
+.set-row:first-of-type { padding-top: 4px; }
+.set-copy b { display: block; font-size: 0.86rem; font-weight: 700; }
+.set-copy em {
+  font-style: normal; font-size: 11.5px; color: var(--slate);
+  display: block; margin-top: 2px; line-height: 1.45;
+}
+.set-input { display: flex; align-items: center; gap: 7px; flex: none; }
+.set-input input {
+  width: 74px; font-family: var(--mono); font-size: 0.9rem; font-weight: 600;
+  text-align: right; padding: 9px 10px; border-radius: 9px;
+  border: 1px solid var(--line-strong); background: var(--white); color: var(--ink);
+  transition: 0.14s;
+}
+.set-input input:focus {
+  outline: none; border-color: var(--red); box-shadow: 0 0 0 3px var(--red-tint);
+}
+.set-input .unit { font-size: 11px; font-weight: 700; color: var(--slate-400); min-width: 32px; }
+
+.info-card h3 { font-size: 0.88rem; font-weight: 800; margin-bottom: 10px; }
+.info-list { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+.info-list li {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 11.5px; color: var(--slate);
+  padding-bottom: 9px; border-bottom: 1px dashed var(--line);
+}
+.info-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+.info-list b { color: var(--ink); font-weight: 700; font-size: 11.5px; text-align: right; word-break: break-all; }
+
 /* -------------------------------------------------------------- responsive */
 @media (max-width: 1180px) {
   .editor-grid { grid-template-columns: 1fr; }
   .preview-col { position: static; }
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
   .dash-grid { grid-template-columns: 1fr; }
+  .settings-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 900px) {

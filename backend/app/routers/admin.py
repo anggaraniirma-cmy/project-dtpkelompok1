@@ -6,8 +6,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from .. import database
-from ..schemas import QuestionPayload
-from ..security import require_admin
+from ..schemas import PasswordPayload, PengaturanPayload, QuestionPayload
+from ..security import hash_password, require_admin, verify_password
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -152,3 +152,51 @@ def list_sesi(limit: int = Query(default=20, ge=1, le=100)):
             "SELECT * FROM sesi_permainan ORDER BY started_at DESC LIMIT ?", (limit,)
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ------------------------------------------------------------ pengaturan game
+@router.get("/pengaturan")
+def get_pengaturan():
+    """Pengaturan permainan aktif + batas yang diizinkan (untuk form admin)."""
+    return {
+        "nilai": database.get_pengaturan(),
+        "batas": {k: {"min": lo, "max": hi}
+                  for k, (lo, hi) in database.PENGATURAN_BATAS.items()},
+        "default": database.PENGATURAN_DEFAULT,
+    }
+
+
+@router.put("/pengaturan")
+def update_pengaturan(payload: PengaturanPayload):
+    """Ubah sebagian pengaturan. Berlaku untuk sesi permainan berikutnya."""
+    try:
+        nilai = database.simpan_pengaturan(payload.terisi())
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    return {"ok": True, "nilai": nilai}
+
+
+# -------------------------------------------------------------- akun admin
+@router.post("/password")
+def ganti_password(payload: PasswordPayload, admin: dict = Depends(require_admin)):
+    """Ganti password admin yang sedang login (wajib password lama)."""
+    username = admin.get("sub")
+    with database.get_conn() as conn:
+        row = conn.execute(
+            "SELECT password_hash FROM admin WHERE username = ?", (username,)
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Akun tidak ditemukan")
+    if not verify_password(payload.password_lama, row["password_hash"]):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Password lama tidak sesuai")
+    if payload.password_lama == payload.password_baru:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "Password baru harus berbeda dari password lama")
+    with database.get_conn() as conn:
+        conn.execute(
+            "UPDATE admin SET password_hash = ? WHERE username = ?",
+            (hash_password(payload.password_baru), username),
+        )
+    # Token lama sengaja dibiarkan berlaku sampai kedaluwarsa: mengganti
+    # password tidak memaksa panitia login ulang di tengah pameran.
+    return {"ok": True, "pesan": "Password berhasil diperbarui"}

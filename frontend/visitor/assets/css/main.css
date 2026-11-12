@@ -311,9 +311,16 @@ main { flex: 1; }
 .stat { display: flex; flex-direction: column; }
 .stat .label { margin-bottom: 1px; }
 .stat strong { font-size: 1.25rem; font-weight: 700; line-height: 1.1; }
-.stat-timer { align-items: center; position: relative; }
+.stat-timer {
+  flex-direction: row; align-items: center; gap: 9px;
+  padding-left: 4px;
+}
+.timer-text { display: flex; flex-direction: column; align-items: flex-end; }
 .stat-timer strong { font-size: 1.05rem; }
-.timer-ring { width: 44px; height: 44px; position: absolute; right: -56px; top: -2px; }
+/* Cincin timer berada DI DALAM alur flex dan di dalam batas kartu. Versi lama
+   memakai position:absolute + right:-56px sehingga meluber dan memicu scroll
+   horizontal pada 768-1024px. */
+.timer-ring { width: 40px; height: 40px; flex: none; }
 .timer-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .ring-bg { fill: none; stroke: var(--line); stroke-width: 3; }
 .ring-fg {
@@ -608,8 +615,7 @@ main { flex: 1; }
   .res-stats > div { padding: 11px 6px; }
   .res-stats strong { font-size: 1rem; }
   .footer-inner { flex-direction: column; align-items: flex-start; }
-  .timer-ring { right: -50px; }
-  .stat-timer { margin-right: 50px; }
+  .timer-ring { width: 34px; height: 34px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

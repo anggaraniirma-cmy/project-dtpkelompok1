@@ -61,7 +61,31 @@ CREATE TABLE IF NOT EXISTS jawaban_permainan (
 
 CREATE INDEX IF NOT EXISTS idx_jawaban_sesi ON jawaban_permainan(sesi_id);
 CREATE INDEX IF NOT EXISTS idx_pertanyaan_kategori ON pertanyaan(kategori);
+
+-- Pengaturan permainan yang bisa diubah panitia dari panel admin tanpa
+-- menyentuh kode. Disimpan sebagai key/value agar mudah ditambah.
+CREATE TABLE IF NOT EXISTS pengaturan (
+    kunci      TEXT PRIMARY KEY,
+    nilai      TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
+
+# Nilai default & batas tiap pengaturan. Batas ditegakkan di backend supaya
+# panitia tidak bisa membuat permainan mustahil (mis. timer 1 detik).
+PENGATURAN_DEFAULT = {
+    "jumlah_soal": 5,       # soal per sesi
+    "durasi_default": 30,   # detik per soal, dipakai saat menambah soal baru
+    "hold_detik": 1.0,      # lama gesture harus ditahan sebelum terkunci
+    "cooldown_detik": 1.5,  # jeda minimal antar jawaban
+}
+
+PENGATURAN_BATAS = {
+    "jumlah_soal": (1, 20),
+    "durasi_default": (5, 180),
+    "hold_detik": (0.6, 3.0),
+    "cooldown_detik": (0.5, 5.0),
+}
 
 SEED_QUESTIONS = [
     ("Apa kepanjangan dari SMK?", "Sekolah Menengah Kejuruan", "Sekolah Menengah Komputer",
@@ -103,7 +127,7 @@ def get_conn() -> Iterator[sqlite3.Connection]:
 
 
 def init_db() -> None:
-    """Buat skema bila belum ada + seed admin & contoh soal (sekali saja)."""
+    """Buat skema bila belum ada + seed admin, pengaturan & contoh soal."""
     with get_conn() as conn:
         conn.executescript(SCHEMA)
         cur = conn.execute("SELECT COUNT(*) AS n FROM admin")
@@ -114,9 +138,15 @@ def init_db() -> None:
                  hash_password(config.ADMIN_DEFAULT_PASSWORD),
                  "Panitia SKOMDA", now_iso()),
             )
+        # Pengaturan: isi hanya kunci yang belum ada (aman untuk upgrade).
+        ts = now_iso()
+        for kunci, nilai in PENGATURAN_DEFAULT.items():
+            conn.execute(
+                "INSERT OR IGNORE INTO pengaturan (kunci, nilai, updated_at) VALUES (?,?,?)",
+                (kunci, str(nilai), ts),
+            )
         cur = conn.execute("SELECT COUNT(*) AS n FROM pertanyaan")
         if cur.fetchone()["n"] == 0:
-            ts = now_iso()
             for q in SEED_QUESTIONS:
                 conn.execute(
                     """INSERT INTO pertanyaan
@@ -125,6 +155,61 @@ def init_db() -> None:
                        VALUES (?,?,?,?,?,?,?,?,1,?,?)""",
                     (*q, ts, ts),
                 )
+
+
+def get_pengaturan() -> dict[str, float | int]:
+    """Baca pengaturan permainan; nilai yang hilang/rusak jatuh ke default.
+
+    Tipe dikembalikan sesuai PENGATURAN_DEFAULT (int untuk soal/durasi,
+    float untuk hold/cooldown) supaya pemakai tidak perlu casting.
+    """
+    data: dict[str, float | int] = dict(PENGATURAN_DEFAULT)
+    try:
+        with get_conn() as conn:
+            rows = conn.execute("SELECT kunci, nilai FROM pengaturan").fetchall()
+    except sqlite3.Error:
+        return data
+    for row in rows:
+        kunci, raw = row["kunci"], row["nilai"]
+        if kunci not in PENGATURAN_DEFAULT:
+            continue
+        cetak = float if isinstance(PENGATURAN_DEFAULT[kunci], float) else int
+        try:
+            data[kunci] = cetak(float(raw))
+        except (TypeError, ValueError):
+            continue
+    return data
+
+
+def simpan_pengaturan(perubahan: dict[str, float | int]) -> dict[str, float | int]:
+    """Validasi + simpan pengaturan. Melempar ValueError bila di luar batas."""
+    bersih: dict[str, float | int] = {}
+    for kunci, nilai in perubahan.items():
+        if kunci not in PENGATURAN_DEFAULT:
+            raise ValueError(f"Pengaturan tidak dikenal: {kunci}")
+        lo, hi = PENGATURAN_BATAS[kunci]
+        try:
+            angka = float(nilai)
+        except (TypeError, ValueError):
+            raise ValueError(f"Nilai {kunci} harus berupa angka")
+        if not (lo <= angka <= hi):
+            raise ValueError(f"Nilai {kunci} harus antara {lo} dan {hi}")
+        cetak = float if isinstance(PENGATURAN_DEFAULT[kunci], float) else int
+        bersih[kunci] = cetak(angka)
+
+    if not bersih:
+        raise ValueError("Tidak ada pengaturan yang dikirim")
+
+    ts = now_iso()
+    with get_conn() as conn:
+        for kunci, nilai in bersih.items():
+            conn.execute(
+                """INSERT INTO pengaturan (kunci, nilai, updated_at) VALUES (?,?,?)
+                   ON CONFLICT(kunci) DO UPDATE SET nilai=excluded.nilai,
+                                                    updated_at=excluded.updated_at""",
+                (kunci, str(nilai), ts),
+            )
+    return get_pengaturan()
 
 
 def row_to_question(row: sqlite3.Row, include_answer: bool = True) -> dict:

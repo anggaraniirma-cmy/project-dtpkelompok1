@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 
+from .. import config, database
 from ..game import engine
 from ..schemas import AnswerPayload, StartPayload
 
@@ -21,16 +22,19 @@ router = APIRouter(prefix="/api/game", tags=["game"])
 
 @router.post("/start")
 def start(payload: StartPayload | None = None):
+    """Mulai sesi baru. Jumlah soal ikut pengaturan panel admin bila tidak dikirim."""
     jumlah = payload.jumlah_soal if payload else None
     try:
-        sesi = engine.start(jumlah)
+        engine.start(jumlah)
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    pengaturan = database.get_pengaturan()
     state = engine.public_state()
     state["konfigurasi"] = {
-        "hold_detik": 1.0,
-        "cooldown_detik": 1.5,
-        "poin_benar": 10,
+        "hold_detik": float(pengaturan["hold_detik"]),
+        "cooldown_detik": float(pengaturan["cooldown_detik"]),
+        "poin_benar": config.POIN_BENAR,
+        "jumlah_soal": int(pengaturan["jumlah_soal"]),
     }
     return state
 
@@ -47,6 +51,12 @@ def state():
 
 @router.post("/answer")
 def answer(payload: AnswerPayload):
+    """Jawab manual (klik). Bisa dimatikan lewat SKOMDA_ALLOW_MANUAL_ANSWER=0."""
+    if not config.ALLOW_MANUAL_ANSWER:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Jawaban manual dinonaktifkan. Gunakan gerakan tangan.",
+        )
     try:
         entry = engine.submit(payload.pilihan, sumber="manual")
     except ValueError as exc:

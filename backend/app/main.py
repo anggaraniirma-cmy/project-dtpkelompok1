@@ -64,6 +64,7 @@ def health():
         "versi": __version__,
         "kamera": bool(pipe and pipe.running),
         "database": str(config.get_db_path().name),
+        "jawaban_manual": config.ALLOW_MANUAL_ANSWER,
     }
 
 

@@ -45,9 +45,16 @@ def get_pipeline() -> Optional[VisionPipeline]:
 
 
 def _new_pipeline() -> VisionPipeline:
+    """Pipeline baru; hold & cooldown mengikuti pengaturan panel admin.
+
+    Pengaturan dibaca saat kamera dinyalakan (bukan per frame) supaya panitia
+    bisa mengubah kepekaan gesture tanpa restart backend.
+    """
+    from .. import database
+    p = database.get_pengaturan()
     return VisionPipeline(stabilizer=GestureStabilizer(
-        hold_seconds=config.GESTURE_HOLD_SECONDS,
-        cooldown_seconds=config.GESTURE_COOLDOWN_SECONDS,
+        hold_seconds=float(p["hold_detik"]),
+        cooldown_seconds=float(p["cooldown_detik"]),
         rearm_seconds=config.GESTURE_REARM_SECONDS,
     ))
 

@@ -52,6 +52,11 @@ GESTURE_COOLDOWN_SECONDS = float(os.getenv("SKOMDA_GESTURE_COOLDOWN", "1.5"))
 GESTURE_REARM_SECONDS = float(os.getenv("SKOMDA_GESTURE_REARM", "0.25"))
 REQUIRE_RIGHT_HAND = os.getenv("SKOMDA_REQUIRE_RIGHT_HAND", "1") == "1"
 
+# Jalur jawab manual (klik opsi) untuk keadaan darurat saat kamera bermasalah.
+# Aktif secara default; set SKOMDA_ALLOW_MANUAL_ANSWER=0 saat pameran bila
+# panitia ingin jawaban MURNI lewat gesture.
+ALLOW_MANUAL_ANSWER = os.getenv("SKOMDA_ALLOW_MANUAL_ANSWER", "1") == "1"
+
 
 def get_db_path() -> Path:
     """Path SQLite; dibaca tiap panggilan agar test bisa override lewat env."""

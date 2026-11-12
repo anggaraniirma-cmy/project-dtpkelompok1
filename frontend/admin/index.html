@@ -102,6 +102,10 @@
         <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 5v5.6l4 2.4-.9 1.6-5.1-3V7z"/></svg>
         Riwayat Sesi
       </button>
+      <button class="nav-item" data-view="settings">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 8a4 4 0 100 8 4 4 0 000-8zm9 4a7.9 7.9 0 01-.1 1.2l2 1.6-2 3.4-2.4-1a8 8 0 01-2 1.2l-.4 2.6h-4l-.4-2.6a8 8 0 01-2-1.2l-2.4 1-2-3.4 2-1.6A7.9 7.9 0 013 12c0-.4 0-.8.1-1.2l-2-1.6 2-3.4 2.4 1a8 8 0 012-1.2L8 3h4l.4 2.6a8 8 0 012 1.2l2.4-1 2 3.4-2 1.6c.1.4.2.8.2 1.2z"/></svg>
+        Pengaturan
+      </button>
     </nav>
 
     <div class="sb-foot">
@@ -389,6 +393,115 @@
             </table>
           </div>
         </article>
+      </section>
+
+      <!-- ---------- SETTINGS ---------- -->
+      <section class="view" id="view-settings">
+        <div class="settings-grid">
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <h3>Pengaturan Permainan</h3>
+                <p>Berlaku untuk sesi pengunjung berikutnya. Kamera perlu dinyalakan ulang
+                   agar perubahan kepekaan gesture terpakai.</p>
+              </div>
+              <span class="badge" id="settingsBadge">TERSIMPAN</span>
+            </div>
+
+            <form id="settingsForm">
+              <div class="set-row">
+                <div class="set-copy">
+                  <b>Jumlah soal per sesi</b>
+                  <em>Berapa pertanyaan yang diundi untuk satu pengunjung.</em>
+                </div>
+                <div class="set-input">
+                  <input type="number" id="setJumlah" min="1" max="20" step="1" required />
+                  <span class="unit">soal</span>
+                </div>
+              </div>
+
+              <div class="set-row">
+                <div class="set-copy">
+                  <b>Durasi bawaan soal</b>
+                  <em>Nilai awal timer saat panitia menambah pertanyaan baru.</em>
+                </div>
+                <div class="set-input">
+                  <input type="number" id="setDurasi" min="5" max="180" step="5" required />
+                  <span class="unit">detik</span>
+                </div>
+              </div>
+
+              <div class="set-row">
+                <div class="set-copy">
+                  <b>Lama menahan gesture</b>
+                  <em>Makin lama, makin sulit terkunci karena gerakan sekilas.</em>
+                </div>
+                <div class="set-input">
+                  <input type="number" id="setHold" min="0.6" max="3" step="0.1" required />
+                  <span class="unit">detik</span>
+                </div>
+              </div>
+
+              <div class="set-row">
+                <div class="set-copy">
+                  <b>Jeda antar jawaban</b>
+                  <em>Mencegah satu gerakan terhitung dua kali.</em>
+                </div>
+                <div class="set-input">
+                  <input type="number" id="setCooldown" min="0.5" max="5" step="0.1" required />
+                  <span class="unit">detik</span>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button class="btn btn-primary" type="submit" id="btnSaveSettings">
+                  <span>Simpan Pengaturan</span>
+                </button>
+                <button class="btn btn-ghost" type="button" id="btnResetSettings">Kembalikan Awal</button>
+              </div>
+            </form>
+          </article>
+
+          <aside class="settings-side">
+            <article class="card">
+              <div class="card-head">
+                <div><h3>Keamanan Akun</h3><p>Ganti password panitia secara berkala.</p></div>
+              </div>
+              <form id="passwordForm">
+                <label class="field">
+                  <span>Password saat ini <i>*</i></span>
+                  <input type="password" id="pwLama" maxlength="128" required
+                         autocomplete="current-password" placeholder="••••••••" />
+                </label>
+                <label class="field">
+                  <span>Password baru <i>*</i></span>
+                  <input type="password" id="pwBaru" minlength="8" maxlength="128" required
+                         autocomplete="new-password" placeholder="Minimal 8 karakter, ada huruf &amp; angka" />
+                </label>
+                <label class="field">
+                  <span>Ulangi password baru <i>*</i></span>
+                  <input type="password" id="pwUlang" minlength="8" maxlength="128" required
+                         autocomplete="new-password" placeholder="••••••••" />
+                </label>
+                <div class="form-actions">
+                  <button class="btn btn-primary" type="submit" id="btnSavePassword">
+                    <span>Perbarui Password</span>
+                  </button>
+                </div>
+              </form>
+            </article>
+
+            <article class="card info-card">
+              <h3>Tentang Sistem</h3>
+              <ul class="info-list">
+                <li><span>Backend API</span><b id="infoApi" class="mono">—</b></li>
+                <li><span>Database</span><b id="infoDb" class="mono">—</b></li>
+                <li><span>Kamera</span><b id="infoCam">—</b></li>
+                <li><span>Versi</span><b id="infoVer" class="mono">—</b></li>
+              </ul>
+            </article>
+          </aside>
+        </div>
       </section>
 
     </main>

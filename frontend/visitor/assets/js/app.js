@@ -23,6 +23,7 @@ const state = {
   duration: 30,
   serveTime: 0,
   manualMode: false,
+  manualAllowed: true,
   lastQuestionKey: null,
 };
 
@@ -64,6 +65,11 @@ async function checkApi() {
     const h = await api('/api/health');
     pill.classList.remove('is-bad'); pill.classList.add('is-ok');
     text.textContent = h.kamera ? 'Sistem siap' : 'Sistem siap · kamera standby';
+    // Panitia bisa mematikan jawab manual (SKOMDA_ALLOW_MANUAL_ANSWER=0);
+    // dalam mode itu tombol cadangan disembunyikan agar pengunjung tidak
+    // menempuh jalur yang pasti ditolak server.
+    state.manualAllowed = h.jawaban_manual !== false;
+    if (!state.manualAllowed) $('#btnManual').style.display = 'none';
     return true;
   } catch (err) {
     pill.classList.remove('is-ok'); pill.classList.add('is-bad');
@@ -87,10 +93,9 @@ async function startGame() {
       return null;
     });
 
-    const gs = await api('/api/game/start', {
-      method: 'POST',
-      body: JSON.stringify({ jumlah_soal: 5 }),
-    });
+    // Jumlah soal ditentukan panitia lewat panel admin (pengaturan), jadi
+    // backend dipanggil tanpa parameter jumlah_soal.
+    const gs = await api('/api/game/start', { method: 'POST', body: '{}' });
 
     state.game = gs;
     state.locked = false;
@@ -236,14 +241,26 @@ function showFeedback(fb, timeout = false) {
 }
 
 function animateNumber(el, from, to) {
+  // Browser boleh menangguhkan requestAnimationFrame (tab disembunyikan /
+  // kios dalam mode tertentu). Tanpa jaring pengaman, skor bisa tertinggal di
+  // angka lama, jadi angka akhir selalu dipasang lewat timeout.
   const dur = 500;
   const t0 = performance.now();
+  let done = false;
+
+  if (typeof requestAnimationFrame !== 'function' || document.visibilityState !== 'visible') {
+    el.textContent = to;
+    return;
+  }
+
   const step = (t) => {
+    if (done) return;
     const p = Math.min(1, (t - t0) / dur);
     el.textContent = Math.round(from + (to - from) * p);
     if (p < 1) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
+  setTimeout(() => { done = true; el.textContent = to; }, dur + 80);
 }
 
 /* ---------------------------------------------------------------- advance */
@@ -408,6 +425,10 @@ function handleStatus(msg) {
 
 /* --------------------------------------------------------------- manual opt */
 function toggleManual() {
+  if (!state.manualAllowed) {
+    toast('Jawab manual dinonaktifkan panitia. Gunakan gerakan tangan.', true);
+    return;
+  }
   state.manualMode = !state.manualMode;
   const on = state.manualMode;
   $('#btnManual').textContent = on
