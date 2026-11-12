@@ -1,0 +1,387 @@
+"""Uji API: autentikasi, otorisasi admin, CRUD soal, alur permainan.
+
+Menggunakan database SQLite sementara (tidak menyentuh data produksi).
+"""
+from __future__ import annotations
+
+import os
+import tempfile
+
+import pytest
+
+_tmpdir = tempfile.mkdtemp(prefix="skomda_test_")
+os.environ["SKOMDA_DB"] = os.path.join(_tmpdir, "test.db")
+os.environ["SKOMDA_SECRET"] = "test-secret-key"
+os.environ.setdefault("SKOMDA_ADMIN_PASS", "skomda2026")
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app import config  # noqa: E402
+from app.main import app  # noqa: E402
+
+ADMIN = {"username": "admin", "password": "skomda2026"}
+
+
+@pytest.fixture(scope="session")
+def client():
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture(scope="session")
+def token(client):
+    r = client.post("/api/auth/login", json=ADMIN)
+    assert r.status_code == 200, r.text
+    return r.json()["access_token"]
+
+
+@pytest.fixture(scope="session")
+def auth(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+# ---------------------------------------------------------------- kesehatan
+def test_health(client):
+    r = client.get("/api/health")
+    assert r.status_code == 200
+    assert r.json()["status"] == "ok"
+
+
+def test_seed_questions_exist(client):
+    """Database baru harus sudah berisi soal contoh (bukan hardcode di game)."""
+    from app import database
+    with database.get_conn() as conn:
+        n = conn.execute("SELECT COUNT(*) n FROM pertanyaan").fetchone()["n"]
+    assert n >= 5
+
+
+# -------------------------------------------------------------------- auth
+def test_login_benar(client):
+    r = client.post("/api/auth/login", json=ADMIN)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["token_type"] == "bearer"
+    assert body["admin"]["username"] == "admin"
+    assert body["access_token"]
+
+
+def test_login_password_salah(client):
+    r = client.post("/api/auth/login", json={"username": "admin", "password": "salah"})
+    assert r.status_code == 401
+    assert "salah" in r.json()["detail"].lower()
+
+
+def test_login_username_tidak_ada(client):
+    r = client.post("/api/auth/login", json={"username": "hacker", "password": "x"})
+    assert r.status_code == 401
+    # Pesan tidak boleh membocorkan apakah username ada
+    assert r.json()["detail"] == "Username atau password salah"
+
+
+def test_password_disimpan_hash(client):
+    from app import database
+    with database.get_conn() as conn:
+        row = conn.execute("SELECT password_hash FROM admin LIMIT 1").fetchone()
+    assert row["password_hash"].startswith("$2b$")
+    assert "skomda2026" not in row["password_hash"]
+
+
+def test_me_butuh_token(client):
+    assert client.get("/api/auth/me").status_code == 401
+    assert client.get("/api/auth/me", headers={"Authorization": "Bearer ngawur"}).status_code == 401
+
+
+# ------------------------------------------------- otorisasi endpoint admin
+ADMIN_ENDPOINTS = [
+    ("get", "/api/admin/stats"),
+    ("get", "/api/admin/pertanyaan"),
+    ("get", "/api/admin/kategori"),
+    ("get", "/api/admin/sesi"),
+    ("get", "/api/admin/pertanyaan/1"),
+]
+
+
+@pytest.mark.parametrize("method,path", ADMIN_ENDPOINTS)
+def test_admin_endpoint_tanpa_token_ditolak(client, method, path):
+    """Pengunjung tidak boleh mengakses endpoint admin."""
+    r = getattr(client, method)(path)
+    assert r.status_code == 401, f"{path} seharusnya 401, dapat {r.status_code}"
+
+
+@pytest.mark.parametrize("method,path", ADMIN_ENDPOINTS)
+def test_admin_endpoint_token_palsu_ditolak(client, method, path):
+    r = getattr(client, method)(path, headers={"Authorization": "Bearer palsu.token.abc"})
+    assert r.status_code == 401
+
+
+def test_admin_tidak_bisa_tulis_tanpa_token(client):
+    payload = {
+        "pertanyaan": "Percobaan tanpa izin menulis soal",
+        "pilihan_a": "A", "pilihan_b": "B", "pilihan_c": "C", "pilihan_d": "D",
+        "jawaban": "A", "kategori": "Uji", "durasi": 30, "aktif": True,
+    }
+    assert client.post("/api/admin/pertanyaan", json=payload).status_code == 401
+
+
+def test_token_kedaluwarsa_ditolak(client):
+    """Token dengan exp lampau harus ditolak."""
+    import time
+    import jwt
+    expired = jwt.encode(
+        {"sub": "admin", "role": "admin", "iat": int(time.time()) - 100, "exp": int(time.time()) - 10},
+        config.get_secret_key(), algorithm="HS256",
+    )
+    r = client.get("/api/admin/stats", headers={"Authorization": f"Bearer {expired}"})
+    assert r.status_code == 401
+
+
+def test_role_bukan_admin_ditolak(client):
+    import time
+    import jwt
+    visitor = jwt.encode(
+        {"sub": "pengunjung", "role": "visitor", "iat": int(time.time()), "exp": int(time.time()) + 600},
+        config.get_secret_key(), algorithm="HS256",
+    )
+    r = client.get("/api/admin/stats", headers={"Authorization": f"Bearer {visitor}"})
+    assert r.status_code == 403
+
+
+# ----------------------------------------------------------------- admin CRUD
+def test_stats(client, auth):
+    r = client.get("/api/admin/stats", headers=auth)
+    assert r.status_code == 200
+    d = r.json()
+    assert d["total_pertanyaan"] >= 5
+    assert isinstance(d["kategori"], list)
+
+
+def test_crud_lengkap(client, auth):
+    payload = {
+        "pertanyaan": "Soal uji CRUD otomatis untuk validasi backend?",
+        "pilihan_a": "Satu", "pilihan_b": "Dua", "pilihan_c": "Tiga", "pilihan_d": "Empat",
+        "jawaban": "C", "kategori": "Uji Otomatis", "durasi": 25, "aktif": True,
+    }
+    # Create
+    r = client.post("/api/admin/pertanyaan", json=payload, headers=auth)
+    assert r.status_code == 201, r.text
+    qid = r.json()["id"]
+    assert r.json()["jawaban"] == "C"
+
+    # Read
+    r = client.get(f"/api/admin/pertanyaan/{qid}", headers=auth)
+    assert r.status_code == 200
+    assert r.json()["pertanyaan"] == payload["pertanyaan"]
+    assert r.json()["pilihan"]["B"] == "Dua"
+
+    # Update
+    payload["pertanyaan"] = "Soal uji CRUD yang sudah diperbarui"
+    payload["jawaban"] = "D"
+    payload["durasi"] = 15
+    r = client.put(f"/api/admin/pertanyaan/{qid}", json=payload, headers=auth)
+    assert r.status_code == 200
+    assert r.json()["jawaban"] == "D"
+    assert r.json()["durasi"] == 15
+
+    # Persistensi: dibaca ulang lewat koneksi baru
+    r = client.get(f"/api/admin/pertanyaan/{qid}", headers=auth)
+    assert r.json()["pertanyaan"] == "Soal uji CRUD yang sudah diperbarui"
+
+    # Delete
+    assert client.delete(f"/api/admin/pertanyaan/{qid}", headers=auth).status_code == 200
+    assert client.get(f"/api/admin/pertanyaan/{qid}", headers=auth).status_code == 404
+
+
+def test_validasi_input_ditolak(client, auth):
+    base = {
+        "pertanyaan": "Valid?", "pilihan_a": "A", "pilihan_b": "B",
+        "pilihan_c": "C", "pilihan_d": "D", "jawaban": "A",
+        "kategori": "Uji", "durasi": 30, "aktif": True,
+    }
+    # pertanyaan terlalu pendek
+    bad = {**base, "pertanyaan": "Ya"}
+    assert client.post("/api/admin/pertanyaan", json=bad, headers=auth).status_code == 422
+
+    # jawaban di luar A-D
+    bad = {**base, "jawaban": "E"}
+    assert client.post("/api/admin/pertanyaan", json=bad, headers=auth).status_code == 422
+
+    # durasi di luar batas
+    bad = {**base, "durasi": 1}
+    assert client.post("/api/admin/pertanyaan", json=bad, headers=auth).status_code == 422
+
+    # pilihan kosong
+    bad = {**base, "pilihan_c": "   "}
+    assert client.post("/api/admin/pertanyaan", json=bad, headers=auth).status_code == 422
+
+
+def test_pencarian_dan_filter(client, auth):
+    for i in range(3):
+        client.post("/api/admin/pertanyaan", headers=auth, json={
+            "pertanyaan": f"Soal pencarian unik zulkan_{i} tentang jaringan",
+            "pilihan_a": "A", "pilihan_b": "B", "pilihan_c": "C", "pilihan_d": "D",
+            "jawaban": "A", "kategori": "Filter Uji", "durasi": 20, "aktif": True,
+        })
+    r = client.get("/api/admin/pertanyaan?q=zulkan_", headers=auth)
+    assert r.status_code == 200
+    assert r.json()["total"] == 3
+
+    r = client.get("/api/admin/pertanyaan?kategori=Filter Uji", headers=auth)
+    assert r.json()["total"] == 3
+
+    r = client.get("/api/admin/pertanyaan?q=zulkan_&kategori=Kategori Lain", headers=auth)
+    assert r.json()["total"] == 0
+
+
+# ------------------------------------------------------------ alur permainan
+def test_alur_permainan_penuh(client):
+    """Mulai -> jawab semua -> selesai, dan skor konsisten."""
+    client.post("/api/game/reset")
+    r = client.post("/api/game/start", json={"jumlah_soal": 3})
+    assert r.status_code == 200, r.text
+    st = r.json()
+    assert st["nomor"] == 1
+    assert st["total_soal"] == 3
+    assert "soal" in st
+    assert "jawaban" not in st["soal"], "kunci jawaban tidak boleh bocor ke browser"
+
+    total_benar = 0
+    for i in range(3):
+        # jawab dengan huruf yang benar (didapat dari DB, bukan dari API)
+        from app import database
+        with database.get_conn() as conn:
+            current = client.get("/api/game/state").json()
+            row = conn.execute(
+                "SELECT jawaban FROM pertanyaan WHERE pertanyaan = ?",
+                (current["soal"]["pertanyaan"],),
+            ).fetchone()
+        correct = row["jawaban"]
+        rr = client.post("/api/game/answer", json={"pilihan": correct})
+        assert rr.status_code == 200, rr.text
+        assert rr.json()["benar"] is True
+        total_benar += 1
+
+        nx = client.post("/api/game/next")
+        assert nx.status_code == 200
+        if i < 2:
+            assert nx.json()["lanjut"] == "berjalan"
+        else:
+            assert nx.json()["lanjut"] == "selesai"
+            hasil = nx.json()["hasil"]
+            assert hasil["benar"] == total_benar
+            assert hasil["skor"] > 0
+            assert hasil["total_soal"] == 3
+
+
+def test_jawaban_ganda_ditolak(client):
+    client.post("/api/game/reset")
+    client.post("/api/game/start", json={"jumlah_soal": 2})
+    assert client.post("/api/game/answer", json={"pilihan": "A"}).status_code == 200
+    r = client.post("/api/game/answer", json={"pilihan": "B"})
+    assert r.status_code == 409
+    assert "sudah dijawab" in r.json()["detail"].lower()
+
+
+def test_jawaban_tidak_valid_ditolak(client):
+    client.post("/api/game/reset")
+    client.post("/api/game/start", json={"jumlah_soal": 2})
+    assert client.post("/api/game/answer", json={"pilihan": "Z"}).status_code == 422
+    assert client.post("/api/game/answer", json={"pilihan": "E"}).status_code == 422
+
+
+def test_tidak_bisa_jawab_tanpa_sesi(client):
+    client.post("/api/game/reset")
+    r = client.post("/api/game/answer", json={"pilihan": "A"})
+    assert r.status_code == 400
+    r = client.post("/api/game/next")
+    assert r.status_code == 400
+
+
+def test_timeout_mencatat_jawaban_kosong(client):
+    client.post("/api/game/reset")
+    client.post("/api/game/start", json={"jumlah_soal": 2})
+    assert client.post("/api/game/timeout").status_code == 200
+    # setelah timeout, soal yang sama tidak bisa dijawab lagi
+    assert client.post("/api/game/answer", json={"pilihan": "A"}).status_code == 409
+    nx = client.post("/api/game/next")
+    assert nx.json()["lanjut"] == "berjalan"
+
+
+def test_start_tanpa_soal_aktif_gagal(client, auth):
+    """Bila semua soal dinonaktifkan, start harus gagal dengan pesan jelas."""
+    items = client.get("/api/admin/pertanyaan?limit=500", headers=auth).json()["items"]
+    ids = [q["id"] for q in items]
+    for qid in ids:
+        q = client.get(f"/api/admin/pertanyaan/{qid}", headers=auth).json()
+        client.put(f"/api/admin/pertanyaan/{qid}", headers=auth, json={
+            "pertanyaan": q["pertanyaan"], "pilihan_a": q["pilihan"]["A"],
+            "pilihan_b": q["pilihan"]["B"], "pilihan_c": q["pilihan"]["C"],
+            "pilihan_d": q["pilihan"]["D"], "jawaban": q["jawaban"],
+            "kategori": q["kategori"], "durasi": q["durasi"], "aktif": False,
+        })
+    client.post("/api/game/reset")
+    r = client.post("/api/game/start", json={"jumlah_soal": 3})
+    assert r.status_code == 400
+    assert "belum ada pertanyaan" in r.json()["detail"].lower()
+
+    # pulihkan agar test lain tetap bisa jalan
+    for qid in ids:
+        q = client.get(f"/api/admin/pertanyaan/{qid}", headers=auth).json()
+        client.put(f"/api/admin/pertanyaan/{qid}", headers=auth, json={
+            "pertanyaan": q["pertanyaan"], "pilihan_a": q["pilihan"]["A"],
+            "pilihan_b": q["pilihan"]["B"], "pilihan_c": q["pilihan"]["C"],
+            "pilihan_d": q["pilihan"]["D"], "jawaban": q["jawaban"],
+            "kategori": q["kategori"], "durasi": q["durasi"], "aktif": True,
+        })
+
+
+def test_soal_diambil_dari_database(client, auth):
+    """Soal yang ditambah lewat admin harus bisa muncul di permainan."""
+    r = client.post("/api/admin/pertanyaan", headers=auth, json={
+        "pertanyaan": "Soal khusus yang ditambahkan panitia untuk pengujian API?",
+        "pilihan_a": "Pilihan satu", "pilihan_b": "Pilihan dua",
+        "pilihan_c": "Pilihan tiga", "pilihan_d": "Pilihan empat",
+        "jawaban": "B", "kategori": "Uji Dinamis", "durasi": 20, "aktif": True,
+    })
+    qid = r.json()["id"]
+
+    client.post("/api/game/reset")
+    # ambil semua soal agar yang baru pasti ikut terundi
+    from app import database
+    with database.get_conn() as conn:
+        total = conn.execute("SELECT COUNT(*) n FROM pertanyaan WHERE aktif=1").fetchone()["n"]
+
+    st = client.post("/api/game/start", json={"jumlah_soal": min(total, 20)}).json()
+    texts = []
+    for i in range(st["total_soal"]):
+        cur = client.get("/api/game/state").json()
+        texts.append(cur["soal"]["pertanyaan"])
+        client.post("/api/game/timeout")
+        client.post("/api/game/next")
+    assert "Soal khusus yang ditambahkan panitia untuk pengujian API?" in texts
+    client.delete(f"/api/admin/pertanyaan/{qid}", headers=auth)
+
+
+# ------------------------------------------------------------ endpoint publik
+def test_info_endpoint(client):
+    r = client.get("/api/info")
+    assert r.status_code == 200
+    assert r.json()["sekolah"] == "SMK Telkom Sidoarjo"
+    assert set(r.json()["gesture"]) == {"A", "B", "C", "D"}
+
+
+def test_cv_endpoints_tanpa_kamera(client):
+    """Endpoint kamera harus gagal dengan rapi (503), bukan crash 500."""
+    client.post("/api/cv/stop")
+    r = client.get("/api/cv/stream")
+    assert r.status_code == 503
+    r = client.get("/api/cv/landmarks")
+    assert r.status_code == 404
+    r = client.get("/api/cv/live")
+    assert r.status_code == 200
+    assert r.json()["aktif"] is False
+
+
+def test_feed_demo_dinonaktifkan(client):
+    """Endpoint injeksi gesture tidak boleh terbuka untuk pengunjung."""
+    r = client.post("/api/cv/feed?gesture=A")
+    assert r.status_code == 403

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SKOMDA Gesture Quiz — SMK Telkom Sidoarjo</title>
+<meta name="description" content="Kuis interaktif dengan gerakan tangan. SMK Telkom Sidoarjo." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/main.css" />
+</head>
+<body>
+
+<!-- ============ HEADER ============ -->
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="#" onclick="return false;">
+      <!-- Ganti assets/img/logo-sekolah.png dengan file logo resmi sekolah -->
+      <span class="brand-mark" id="brandMark">
+        <img src="assets/img/logo-sekolah.png" alt="Logo SMK Telkom Sidoarjo"
+             onerror="this.remove();document.getElementById('brandMark').classList.add('is-empty')" />
+        <span class="mark-fallback">SMK</span>
+      </span>
+      <span class="brand-text">
+        <strong>SMK TELKOM SIDOARJO</strong>
+        <em>SKOMDA Gesture Quiz</em>
+      </span>
+    </a>
+
+    <div class="header-right">
+      <span class="pill" id="apiPill"><i class="dot"></i><span id="apiPillText">Menghubungkan…</span></span>
+      <a class="ghost-link" href="http://localhost:3000" target="_blank" rel="noopener">Panel Panitia</a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ LANDING ============ -->
+  <section id="screen-landing" class="screen is-active">
+    <div class="wrap hero">
+      <div class="hero-copy">
+        <span class="eyebrow"><i class="tick"></i> PAMERAN TEKNOLOGI · COMPUTER VISION</span>
+        <h1>
+          Jawab pertanyaan<br />
+          dengan <span class="accent">gerakan tangan.</span>
+        </h1>
+        <p class="lede">
+          SKOMDA Gesture Quiz membaca 21 titik tanganmu lewat kamera, lalu mengenali
+          gerakan jari sebagai jawaban A, B, C, atau D. Tanpa keyboard, tanpa sentuhan.
+        </p>
+
+        <ul class="hero-points">
+          <li><b>01</b> Berdiri di depan kamera</li>
+          <li><b>02</b> Bentuk gerakan jari sesuai jawaban</li>
+          <li><b>03</b> Tahan 1 detik — jawaban terkunci</li>
+        </ul>
+
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-lg" id="btnStart">
+            <span>MULAI BERMAIN</span>
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+          </button>
+          <a class="btn btn-ghost btn-lg" href="#panduan">Lihat panduan gesture</a>
+        </div>
+
+        <p class="hint-line">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-6h2zm0-8h-2V7h2z"/></svg>
+          Gunakan <strong>tangan kanan</strong> &amp; pastikan ibu jari terlipat.
+        </p>
+      </div>
+
+      <div class="hero-visual" id="panduan">
+        <div class="scan-card">
+          <div class="scan-head">
+            <span class="label">PANDUAN GESTURE</span>
+            <span class="live-badge"><i class="dot"></i> A/B/C/D</span>
+          </div>
+
+          <div class="gesture-grid">
+            <article class="gesture-card" data-letter="A">
+              <div class="hand" aria-hidden="true">
+                <span class="fingers">
+                  <i class="f up"></i><i class="f"></i><i class="f"></i><i class="f"></i>
+                </span>
+                <span class="thumb"></span>
+              </div>
+              <div class="gesture-meta">
+                <span class="letter">A</span>
+                <span class="desc">Telunjuk terangkat</span>
+              </div>
+            </article>
+
+            <article class="gesture-card" data-letter="B">
+              <div class="hand" aria-hidden="true">
+                <span class="fingers">
+                  <i class="f up"></i><i class="f up"></i><i class="f"></i><i class="f"></i>
+                </span>
+                <span class="thumb"></span>
+              </div>
+              <div class="gesture-meta">
+                <span class="letter">B</span>
+                <span class="desc">Telunjuk + tengah</span>
+              </div>
+            </article>
+
+            <article class="gesture-card" data-letter="C">
+              <div class="hand" aria-hidden="true">
+                <span class="fingers">
+                  <i class="f up"></i><i class="f up"></i><i class="f up"></i><i class="f"></i>
+                </span>
+                <span class="thumb"></span>
+              </div>
+              <div class="gesture-meta">
+                <span class="letter">C</span>
+                <span class="desc">Tiga jari terangkat</span>
+              </div>
+            </article>
+
+            <article class="gesture-card" data-letter="D">
+              <div class="hand" aria-hidden="true">
+                <span class="fingers">
+                  <i class="f up"></i><i class="f up"></i><i class="f up"></i><i class="f up"></i>
+                </span>
+                <span class="thumb"></span>
+              </div>
+              <div class="gesture-meta">
+                <span class="letter">D</span>
+                <span class="desc">Empat jari terbuka</span>
+              </div>
+            </article>
+          </div>
+
+          <div class="scan-foot">
+            <span><i class="dot dot-red"></i> MediaPipe Hand Landmarker</span>
+            <span><i class="dot dot-dim"></i> 21 landmark</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap feature-row">
+      <div class="feature"><span class="fi">◉</span><div><b>Deteksi 21 titik</b><p>Setiap jari dinilai satu per satu, bukan sekadar dihitung jumlahnya.</p></div></div>
+      <div class="feature"><span class="fi">◈</span><div><b>Stabilisasi 1 detik</b><p>Gerakan harus ditahan agar tidak salah kunci karena gugup.</p></div></div>
+      <div class="feature"><span class="fi">⬢</span><div><b>Soal dari database</b><p>Pertanyaan dikelola panitia dan selalu diperbarui.</p></div></div>
+    </div>
+  </section>
+
+  <!-- ============ GAME ============ -->
+  <section id="screen-game" class="screen">
+    <div class="wrap game-shell">
+      <div class="game-bar">
+        <div class="progress-block">
+          <div class="progress-top">
+            <span class="label">PROGRES</span>
+            <span id="progressText" class="mono">1 / 5</span>
+          </div>
+          <div class="progress-track"><span id="progressBar"></span></div>
+        </div>
+        <div class="bar-stats">
+          <div class="stat">
+            <span class="label">SKOR</span>
+            <strong id="scoreValue" class="mono">0</strong>
+          </div>
+          <div class="stat stat-timer">
+            <span class="label">WAKTU</span>
+            <strong id="timerValue" class="mono">30</strong>
+            <div class="timer-ring"><svg viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15.5"/><circle id="ringFg" class="ring-fg" cx="18" cy="18" r="15.5"/></svg></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="game-grid">
+        <!-- CAMERA -->
+        <div class="cam-col">
+          <div class="cam-frame">
+            <div class="cam-topbar">
+              <span class="cam-label"><i class="dot dot-red"></i> KAMERA LANGSUNG</span>
+              <span class="cam-fps mono" id="fpsLabel">—</span>
+            </div>
+            <div class="cam-stage">
+              <img id="camStream" alt="Tampilan kamera dengan deteksi tangan" />
+              <div class="cam-offline" id="camOffline">
+                <div class="spinner"></div>
+                <p id="camOfflineText">Menyiapkan kamera…</p>
+              </div>
+              <div class="cam-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            </div>
+            <div class="cam-foot">
+              <div class="hold-meter">
+                <span class="label">TAHAN GERAKAN</span>
+                <div class="hold-track"><span id="holdBar"></span></div>
+              </div>
+              <div class="detected">
+                <span class="label">TERBACA</span>
+                <strong id="detectedGesture" class="mono">—</strong>
+              </div>
+            </div>
+          </div>
+          <p class="cam-note" id="camNote">Arahkan tangan kanan ke kamera, ibu jari terlipat.</p>
+        </div>
+
+        <!-- QUESTION -->
+        <div class="quiz-col">
+          <div class="question-card">
+            <div class="q-head">
+              <span class="chip" id="qKategori">KATEGORI</span>
+              <span class="q-index mono" id="qIndex">SOAL 01</span>
+            </div>
+            <h2 id="qText">Menyiapkan pertanyaan…</h2>
+
+            <div class="options" id="options">
+              <button class="option" data-choice="A">
+                <span class="opt-letter">A</span>
+                <span class="opt-text">—</span>
+                <span class="opt-key">1 jari</span>
+              </button>
+              <button class="option" data-choice="B">
+                <span class="opt-letter">B</span>
+                <span class="opt-text">—</span>
+                <span class="opt-key">2 jari</span>
+              </button>
+              <button class="option" data-choice="C">
+                <span class="opt-letter">C</span>
+                <span class="opt-text">—</span>
+                <span class="opt-key">3 jari</span>
+              </button>
+              <button class="option" data-choice="D">
+                <span class="opt-letter">D</span>
+                <span class="opt-text">—</span>
+                <span class="opt-key">4 jari</span>
+              </button>
+            </div>
+
+            <div class="q-foot">
+              <button class="link-btn" id="btnManual">Kamera bermasalah? Jawab dengan klik</button>
+              <button class="link-btn danger" id="btnQuit">Keluar</button>
+            </div>
+          </div>
+
+          <div class="feedback" id="feedback" aria-live="polite">
+            <div class="fb-icon" id="fbIcon">✓</div>
+            <div class="fb-body">
+              <strong id="fbTitle">Benar!</strong>
+              <p id="fbText">Jawaban benar A.</p>
+            </div>
+            <div class="fb-points mono" id="fbPoints">+10</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RESULT ============ -->
+  <section id="screen-result" class="screen">
+    <div class="wrap result-wrap">
+      <div class="result-card">
+        <span class="eyebrow"><i class="tick"></i> PERMAINAN SELESAI</span>
+        <div class="score-ring">
+          <svg viewBox="0 0 120 120">
+            <circle class="sr-bg" cx="60" cy="60" r="52"/>
+            <circle id="srFg" class="sr-fg" cx="60" cy="60" r="52"/>
+          </svg>
+          <div class="score-ring-inner">
+            <strong id="resSkor" class="mono">0</strong>
+            <span>poin</span>
+          </div>
+        </div>
+        <h2 id="resPredikat">Sempurna</h2>
+        <p id="resPesan" class="res-pesan">Luar biasa!</p>
+
+        <div class="res-stats">
+          <div><span class="label">BENAR</span><strong id="resBenar" class="mono">0</strong></div>
+          <div><span class="label">SALAH</span><strong id="resSalah" class="mono">0</strong></div>
+          <div><span class="label">AKURASI</span><strong id="resPersen" class="mono">0%</strong></div>
+        </div>
+
+        <div class="res-list" id="resList"></div>
+
+        <div class="res-actions">
+          <button class="btn btn-primary btn-lg" id="btnReplay">MAIN LAGI</button>
+          <button class="btn btn-ghost btn-lg" id="btnHome">Kembali ke Beranda</button>
+        </div>
+        <p class="res-foot">Terima kasih sudah mencoba teknologi Computer Vision SMK Telkom Sidoarjo.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <div class="footer-brand">
+      <span class="footer-mark">SMK</span>
+      <div>
+        <strong>SMK TELKOM SIDOARJO</strong>
+        <p>SKOMDA Gesture Quiz · Pameran Teknologi</p>
+      </div>
+    </div>
+    <div class="footer-meta">
+      <span>Computer Vision · MediaPipe · OpenCV</span>
+      <span id="footerYear">© 2026</span>
+    </div>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status"></div>
+
+<!-- Konfigurasi API dari server statis (scripts/serve_frontend.py).
+     Bila file ini tidak tersedia (mis. dibuka via file://), app.js
+     memakai http://localhost:8000 sebagai default. -->
+<script src="config.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

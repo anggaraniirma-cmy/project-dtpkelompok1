@@ -1,0 +1,33 @@
+# --- Python ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# --- Database & data runtime ---------------------------------------------
+backend/data/*.db
+backend/data/*.db-journal
+backend/data/*.db-wal
+backend/data/*.db-shm
+backend/data/.jwt_secret
+*.sqlite3
+
+# --- Model MediaPipe ------------------------------------------------------
+# hand_landmarker.task (7,5 MB) SENGAJA ikut di-commit agar repo langsung
+# bisa dijalankan. scripts/download_model.py tersedia sebagai alternatif.
+
+# --- Berkas sementara pengujian / debug --------------------------------
+scratch_*
+sapi.log
+.probe_*.py
+screenshots/
+*.log
+
+# --- OS / editor ---------------------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Panel Panitia — SKOMDA Gesture Quiz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/admin.css" />
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div class="login-screen is-active" id="loginScreen">
+  <div class="login-visual">
+    <div class="lv-brand">
+      <span class="lv-mark">
+        <img src="assets/img/logo-sekolah.png" alt="Logo SMK Telkom Sidoarjo"
+             onerror="this.remove()" />
+        <span>SMK</span>
+      </span>
+      <div>
+        <strong>SMK TELKOM SIDOARJO</strong>
+        <em>SKOMDA Gesture Quiz</em>
+      </div>
+    </div>
+    <div class="lv-copy">
+      <span class="lv-tag">PANEL PANITIA</span>
+      <h1>Kelola soal<br />kuis gerakan tangan.</h1>
+      <p>Tambahkan pertanyaan, atur kategori dan durasi, lalu pratinjau
+         sebelum dipakai di pameran.</p>
+    </div>
+    <div class="lv-grid" aria-hidden="true"></div>
+    <div class="lv-foot">Computer Vision · MediaPipe · OpenCV</div>
+  </div>
+
+  <div class="login-form-wrap">
+    <form class="login-form" id="loginForm" autocomplete="on">
+      <div class="lf-head">
+        <h2>Masuk ke panel</h2>
+        <p>Gunakan akun panitia yang diberikan.</p>
+      </div>
+
+      <label class="field">
+        <span>Username</span>
+        <input type="text" id="loginUser" name="username" required
+               minlength="3" maxlength="50" placeholder="admin" autocomplete="username" />
+      </label>
+
+      <label class="field">
+        <span>Password</span>
+        <div class="pw-wrap">
+          <input type="password" id="loginPass" name="password" required
+                 maxlength="128" placeholder="••••••••" autocomplete="current-password" />
+          <button type="button" class="pw-toggle" id="pwToggle" aria-label="Tampilkan password">Lihat</button>
+        </div>
+      </label>
+
+      <div class="login-error" id="loginError" role="alert"></div>
+
+      <button class="btn btn-primary btn-block" type="submit" id="btnLogin">
+        <span>MASUK</span>
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M10 17l5-5-5-5v3H3v4h7z"/><path fill="currentColor" d="M19 3h-7v2h7v14h-7v2h7a2 2 0 002-2V5a2 2 0 00-2-2z"/></svg>
+      </button>
+
+      <p class="lf-hint">Akun default: <code>admin</code> / <code>skomda2026</code> — segera ganti untuk produksi.</p>
+    </form>
+  </div>
+</div>
+
+<!-- ================= DASHBOARD ================= -->
+<div class="app" id="app">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand">
+      <span class="sb-mark">
+        <img src="assets/img/logo-sekolah.png" alt="Logo sekolah" onerror="this.remove()" />
+        <span>SMK</span>
+      </span>
+      <div class="sb-text">
+        <strong>SMK TELKOM SIDOARJO</strong>
+        <em>SKOMDA Gesture Quiz</em>
+      </div>
+    </div>
+
+    <nav class="sb-nav" id="sbNav">
+      <span class="sb-label">MENU</span>
+      <button class="nav-item is-active" data-view="dashboard">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 13h8V3H3zm0 8h8v-6H3zm10 0h8V11h-8zm0-18v6h8V3z"/></svg>
+        Dashboard
+      </button>
+      <button class="nav-item" data-view="questions">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 3h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1zm3 4v2h10V7zm0 4v2h10v-2zm0 4v2h6v-2z"/></svg>
+        Bank Pertanyaan
+      </button>
+      <button class="nav-item" data-view="editor">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z"/></svg>
+        Tambah Pertanyaan
+      </button>
+      <button class="nav-item" data-view="sessions">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 5v5.6l4 2.4-.9 1.6-5.1-3V7z"/></svg>
+        Riwayat Sesi
+      </button>
+    </nav>
+
+    <div class="sb-foot">
+      <div class="sb-user">
+        <span class="avatar" id="sbAvatar">P</span>
+        <div>
+          <strong id="sbName">Panitia</strong>
+          <em id="sbUser">admin</em>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="btnLogout">Keluar</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="burger" id="burger" aria-label="Buka menu">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+      </button>
+      <div class="tb-title">
+        <h1 id="viewTitle">Dashboard</h1>
+        <p id="viewSub">Ringkasan bank pertanyaan SKOMDA Gesture Quiz</p>
+      </div>
+      <div class="tb-right">
+        <span class="pill" id="apiPill"><i class="dot"></i><span id="apiText">Menghubungkan…</span></span>
+        <a class="btn btn-ghost btn-sm" href="http://localhost:8080" target="_blank" rel="noopener">Buka Panel Pengunjung</a>
+      </div>
+    </header>
+
+    <main class="content">
+
+      <!-- ---------- DASHBOARD ---------- -->
+      <section class="view is-active" id="view-dashboard">
+        <div class="stat-grid" id="statGrid">
+          <article class="stat-card">
+            <span class="sc-label">TOTAL PERTANYAAN</span>
+            <strong class="sc-value mono" id="stTotal">—</strong>
+            <span class="sc-sub" id="stAktif">— aktif</span>
+          </article>
+          <article class="stat-card">
+            <span class="sc-label">KATEGORI</span>
+            <strong class="sc-value mono" id="stKategori">—</strong>
+            <span class="sc-sub">kelompok soal</span>
+          </article>
+          <article class="stat-card">
+            <span class="sc-label">SESI DIMAINKAN</span>
+            <strong class="sc-value mono" id="stSesi">—</strong>
+            <span class="sc-sub">selesai</span>
+          </article>
+          <article class="stat-card">
+            <span class="sc-label">AKURASI JAWABAN</span>
+            <strong class="sc-value mono" id="stAkurasi">—</strong>
+            <span class="sc-sub" id="stJawaban">— jawaban</span>
+          </article>
+        </div>
+
+        <div class="dash-grid">
+          <article class="card">
+            <div class="card-head">
+              <div><h3>Distribusi Kategori</h3><p>Sebaran soal per kategori</p></div>
+            </div>
+            <div class="bars" id="kategoriBars"><p class="empty">Belum ada data.</p></div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <div><h3>Aktivitas Terbaru</h3><p>Soal yang terakhir diubah</p></div>
+              <button class="link-btn" data-goto="questions">Lihat semua</button>
+            </div>
+            <div class="activity" id="activityList"><p class="empty">Belum ada data.</p></div>
+          </article>
+        </div>
+
+        <article class="card promo-card">
+          <div class="promo-copy">
+            <h3>Siap untuk pameran?</h3>
+            <p>Pastikan kamera terpasang, backend berjalan, dan panel pengunjung terbuka di
+               layar utama. Uji gesture A–D sebelum pengunjung pertama datang.</p>
+          </div>
+          <div class="promo-actions">
+            <button class="btn btn-primary" data-goto="editor">Tambah Soal</button>
+            <a class="btn btn-ghost" href="http://localhost:8080" target="_blank" rel="noopener">Uji Kuis</a>
+          </div>
+        </article>
+      </section>
+
+      <!-- ---------- QUESTIONS ---------- -->
+      <section class="view" id="view-questions">
+        <div class="toolbar">
+          <div class="search-wrap">
+            <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M10 2a8 8 0 105.3 14l4.4 4.4 1.4-1.4L16.7 14A8 8 0 0010 2zm0 2a6 6 0 110 12 6 6 0 010-12z"/></svg>
+            <input type="search" id="searchInput" placeholder="Cari pertanyaan atau pilihan jawaban…" />
+          </div>
+          <select id="filterKategori" class="select">
+            <option value="">Semua kategori</option>
+          </select>
+          <select id="filterAktif" class="select">
+            <option value="">Semua status</option>
+            <option value="1">Aktif</option>
+            <option value="0">Nonaktif</option>
+          </select>
+          <button class="btn btn-primary" data-goto="editor">+ Tambah</button>
+        </div>
+
+        <article class="card card-flush">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="width:52px">ID</th>
+                  <th>Pertanyaan</th>
+                  <th style="width:130px">Kategori</th>
+                  <th style="width:78px">Kunci</th>
+                  <th style="width:78px">Durasi</th>
+                  <th style="width:94px">Status</th>
+                  <th style="width:132px">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="questionRows">
+                <tr><td colspan="7" class="table-empty">Memuat…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-foot">
+            <span id="tableCount">—</span>
+            <div class="pager">
+              <button class="btn btn-ghost btn-sm" id="prevPage" disabled>Sebelumnya</button>
+              <span class="mono" id="pageLabel">1 / 1</span>
+              <button class="btn btn-ghost btn-sm" id="nextPage" disabled>Berikutnya</button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <!-- ---------- EDITOR ---------- -->
+      <section class="view" id="view-editor">
+        <form id="questionForm" class="editor-grid">
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <h3 id="editorTitle">Tambah Pertanyaan</h3>
+                <p>Soal akan langsung tersedia di panel pengunjung setelah disimpan.</p>
+              </div>
+              <span class="badge" id="editorBadge">BARU</span>
+            </div>
+
+            <label class="field">
+              <span>Pertanyaan <i>*</i></span>
+              <textarea id="fPertanyaan" rows="3" maxlength="500" required
+                        placeholder="Contoh: Library Python apa yang dipakai untuk mendeteksi tangan?"></textarea>
+              <em class="hint"><span id="countPertanyaan">0</span>/500 karakter</em>
+            </label>
+
+            <div class="opt-grid">
+              <label class="field opt-field">
+                <span>Pilihan A <i>*</i></span>
+                <div class="opt-row">
+                  <input type="text" id="fA" maxlength="200" required placeholder="Jawaban A" />
+                  <label class="radio-flag" title="Tandai sebagai jawaban benar">
+                    <input type="radio" name="jawaban" value="A" checked />
+                    <span>benar</span>
+                  </label>
+                </div>
+              </label>
+
+              <label class="field opt-field">
+                <span>Pilihan B <i>*</i></span>
+                <div class="opt-row">
+                  <input type="text" id="fB" maxlength="200" required placeholder="Jawaban B" />
+                  <label class="radio-flag">
+                    <input type="radio" name="jawaban" value="B" />
+                    <span>benar</span>
+                  </label>
+                </div>
+              </label>
+
+              <label class="field opt-field">
+                <span>Pilihan C <i>*</i></span>
+                <div class="opt-row">
+                  <input type="text" id="fC" maxlength="200" required placeholder="Jawaban C" />
+                  <label class="radio-flag">
+                    <input type="radio" name="jawaban" value="C" />
+                    <span>benar</span>
+                  </label>
+                </div>
+              </label>
+
+              <label class="field opt-field">
+                <span>Pilihan D <i>*</i></span>
+                <div class="opt-row">
+                  <input type="text" id="fD" maxlength="200" required placeholder="Jawaban D" />
+                  <label class="radio-flag">
+                    <input type="radio" name="jawaban" value="D" />
+                    <span>benar</span>
+                  </label>
+                </div>
+              </label>
+            </div>
+
+            <div class="meta-grid">
+              <label class="field">
+                <span>Kategori</span>
+                <input type="text" id="fKategori" list="kategoriList" maxlength="40"
+                       value="Umum" required placeholder="Contoh: Computer Vision" />
+                <datalist id="kategoriList"></datalist>
+              </label>
+
+              <label class="field">
+                <span>Durasi (detik)</span>
+                <input type="number" id="fDurasi" min="5" max="180" value="30" required />
+              </label>
+
+              <label class="field">
+                <span>Status</span>
+                <div class="switch-wrap">
+                  <input type="checkbox" id="fAktif" checked hidden />
+                  <button type="button" class="switch" id="switchAktif" role="switch" aria-checked="true">
+                    <span></span>
+                  </button>
+                  <em id="switchLabel">Aktif</em>
+                </div>
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn-primary" type="submit" id="btnSave">
+                <span>Simpan Pertanyaan</span>
+              </button>
+              <button class="btn btn-ghost" type="button" id="btnCancel">Batal</button>
+              <button class="btn btn-ghost" type="button" id="btnResetForm">Form Kosong</button>
+            </div>
+          </div>
+
+          <!-- pratinjau -->
+          <aside class="preview-col">
+            <div class="preview-head">
+              <span class="label">PRATINJAU</span>
+              <span class="pv-live"><i class="dot"></i> Tampilan pengunjung</span>
+            </div>
+            <div class="pv-card">
+              <div class="pv-top">
+                <span class="chip" id="pvKategori">UMUM</span>
+                <span class="mono" id="pvDurasi">30s</span>
+              </div>
+              <h4 id="pvPertanyaan">Pertanyaan akan tampil di sini…</h4>
+              <div class="pv-options">
+                <div class="pv-opt"><span class="l">A</span><span class="t">Pilihan A</span></div>
+                <div class="pv-opt"><span class="l">B</span><span class="t">Pilihan B</span></div>
+                <div class="pv-opt"><span class="l">C</span><span class="t">Pilihan C</span></div>
+                <div class="pv-opt"><span class="l">D</span><span class="t">Pilihan D</span></div>
+              </div>
+              <div class="pv-foot">
+                <span>Jawaban terkunci setelah gerakan ditahan</span>
+                <strong id="pvKunci">A</strong>
+              </div>
+            </div>
+            <p class="pv-note">Pratinjau mengikuti isian form secara langsung.</p>
+          </aside>
+        </form>
+      </section>
+
+      <!-- ---------- SESSIONS ---------- -->
+      <section class="view" id="view-sessions">
+        <article class="card card-flush">
+          <div class="card-head card-head-pad">
+            <div><h3>Riwayat Sesi Permainan</h3><p>20 sesi terakhir dari database</p></div>
+            <button class="btn btn-ghost btn-sm" id="btnRefreshSesi">Muat ulang</button>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>ID Sesi</th>
+                  <th style="width:90px">Soal</th>
+                  <th style="width:90px">Benar</th>
+                  <th style="width:90px">Skor</th>
+                  <th style="width:110px">Status</th>
+                  <th>Mulai</th>
+                  <th>Selesai</th>
+                </tr>
+              </thead>
+              <tbody id="sessionRows">
+                <tr><td colspan="7" class="table-empty">Memuat…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- ================= MODAL ================= -->
+<div class="modal" id="modal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="modalTitle">Konfirmasi</h3>
+      <button class="icon-btn" id="modalClose" aria-label="Tutup">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="modalCancel">Batal</button>
+      <button class="btn btn-danger" id="modalConfirm">Hapus</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<!-- Konfigurasi API dari server statis (scripts/serve_frontend.py).
+     Bila file ini tidak tersedia (mis. dibuka via file://), admin.js
+     memakai http://localhost:8000 sebagai default. -->
+<script src="config.js"></script>
+<script src="assets/js/admin.js"></script>
+</body>
+</html>
