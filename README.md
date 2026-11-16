@@ -8,6 +8,9 @@ Deteksi tangan memakai **MediaPipe Hand Landmarker (21 titik)** dan klasifikasi
 rule-based per jari, dijalankan di **Python + OpenCV** dan disalurkan ke browser
 melalui **FastAPI**.
 
+> Cara menjalankan langkah demi langkah (install, model, URL, troubleshooting):
+> lihat **`CARA-RUN.md`**. Daftar library ada di `requirements.txt`.
+
 ---
 
 ## Arsitektur

@@ -1,24 +1,38 @@
-# Dependency backend SKOMDA Gesture Quiz.
-# Versi dipin ke kombinasi yang terbukti berjalan di mesin pengembangan
-# (Python 3.11, Windows 11). Jangan naikkan mediapipe tanpa menguji ulang:
-# mediapipe >= 1.3 menghapus sebagian API tasks yang dipakai di sini.
+# ===========================================================================
+# SKOMDA Gesture Quiz — dependency backend
+# Python 3.11 (Windows 11 / Linux / macOS)
+#
+# Pasang:
+#     python -m venv .venv
+#     .venv\Scripts\python.exe -m pip install -r requirements.txt
+#
+# Versi di bawah dipin PERSIS ke kombinasi yang terbukti berjalan di mesin
+# pengembangan (venv proyek ini) dan lulus 95 test. Jangan naikkan mediapipe
+# tanpa menguji ulang: mediapipe >= 1.3 menghapus sebagian API tasks yang
+# dipakai backend/app/cv/landmarks.py.
+#
+# Yang TIDAK ditulis di sini karena ikut terpasang otomatis sebagai dependency
+# dari mediapipe/opencv: opencv-contrib-python, matplotlib, pillow, pyyaml,
+# flatbuffers, sounddevice, absl-py, protobuf, dll.
+# ===========================================================================
 
 # --- Web / API ------------------------------------------------------------
-fastapi==0.162.4
-uvicorn==0.54.0
-websockets==17.4
-pydantic==2.14.3
-python-multipart==0.0.33
+fastapi==0.162.4          # framework HTTP + WebSocket, routing /api/*
+uvicorn==0.54.0           # ASGI server; dijalankan lewat `python -m app`
+websockets==17.4          # transport WebSocket untuk status live /api/cv/ws
+starlette==1.10.0         # ASGI toolkit di bawah FastAPI (dipin agar konsisten)
+pydantic==2.14.3          # validasi request/response (backend/app/schemas.py)
+python-multipart==0.0.33  # parser form/multipart, dibutuhkan FastAPI bila ada endpoint form
 
 # --- Keamanan -------------------------------------------------------------
-PyJWT==2.15.1
-bcrypt==5.0.0
+PyJWT==2.15.1             # token login admin (HS256), backend/app/security.py
+bcrypt==5.0.0             # hash password admin (bcrypt langsung, bukan lewat passlib)
 
 # --- Computer vision ------------------------------------------------------
-mediapipe==1.2.2
-opencv-python==5.0.0.93
-numpy==2.4.6
+mediapipe==1.2.2          # Hand Landmarker 21 titik (backend/app/cv/landmarks.py)
+opencv-python==5.0.0.93   # cv2: capture webcam, overlay, encode JPEG/MJPEG
+numpy==2.4.6              # geometri jari & normalisasi landmark
 
 # --- Pengujian ------------------------------------------------------------
-pytest==9.2.0
-httpx==0.28.1
+pytest==9.2.0             # test suite (tests/, 95 test)
+httpx==0.28.1             # dibutuhkan fastapi.testclient (TestClient)
