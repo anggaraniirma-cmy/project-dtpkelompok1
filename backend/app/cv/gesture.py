@@ -161,10 +161,8 @@ class GestureClassifier:
                 label=GESTURE_LABEL.get(gesture, ""),
             )
 
-        if require_right and obs.handedness not in ("Right", "Unknown"):
-            return make(None, "Gunakan tangan kanan", hand_ok=False)
-        if obs.handedness == "Left":
-            return make(None, "Gunakan tangan kanan", hand_ok=False)
+        if require_right and obs.handedness == "Left":
+            return make(None, "Itu tangan kiri — gunakan tangan kanan", hand_ok=False)
 
         if not thumb_folded:
             return make(None, "Lipat ibu jari")

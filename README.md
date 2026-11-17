@@ -149,6 +149,11 @@ Stabilisasi: sampel 0,6 detik + mayoritas ≥60%, harus bertahan 1 detik penuh,
 lalu cooldown 1,5 detik dan latch sampai tangan dilepas. Gesture di luar aturan
 (campuran tidak berurutan, ibu jari terbuka, tangan kiri) diabaikan.
 
+Catatan handedness: frame dicerminkan (mode cermin) sebelum inferensi, sedangkan
+MediaPipe melabeli `Right`/`Left` berdasarkan gambar apa adanya. Karena itu label
+dibalik di `landmarks.real_handedness()` supaya "tangan kanan" di UI = tangan
+kanan pengunjung yang sebenarnya.
+
 Angka-angka ini bisa diubah panitia di **Pengaturan** tanpa menyentuh kode.
 
 ### Kalibrasi ambang dengan tangan nyata

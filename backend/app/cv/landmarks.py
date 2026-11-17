@@ -3,10 +3,15 @@
 mediapipe 1.2.2 tidak lagi menyediakan mp.solutions.hands, jadi dipakai
 mediapipe.tasks.python.vision dengan model .task dan RunningMode.VIDEO.
 
-Frame di-flip horizontal SEBELUM inferensi:
-  - pengunjung melihat kamera sebagai cermin (natural untuk pameran),
-  - MediaPipe mengasumsikan input sudah mirror, jadi label handedness dan
-    arah "kanan" tetap konsisten.
+Frame di-flip horizontal SEBELUM inferensi supaya pengunjung melihat kamera
+sebagai cermin (natural untuk pameran).
+
+PENTING soal handedness: model MediaPipe melabeli "Right"/"Left" dengan
+asumsi gambar input TIDAK dicerminkan (foto biasa). Karena frame di sini
+sudah di-flip, label yang keluar adalah kebalikan tangan aslinya — tangan
+kanan nyata dilaporkan "Left". Label karena itu dibalik lewat
+`real_handedness()` agar seluruh sistem (classifier, overlay, WebSocket)
+bicara tentang tangan yang sebenarnya.
 """
 from __future__ import annotations
 
@@ -33,6 +38,16 @@ HAND_CONNECTIONS: tuple[tuple[int, int], ...] = (
 )
 
 FINGER_TIPS = {"thumb": 4, "index": 8, "middle": 12, "ring": 16, "pinky": 20}
+
+# MediaPipe memberi label berdasarkan gambar apa adanya (tidak dicerminkan).
+# Frame di sini dicerminkan sebelum inferensi, jadi labelnya harus dibalik
+# agar sesuai tangan pengunjung yang sebenarnya.
+_FLIP_HANDEDNESS = {"Left": "Right", "Right": "Left"}
+
+
+def real_handedness(label: Optional[str]) -> str:
+    """Terjemahkan label MediaPipe ke tangan sebenarnya (frame sudah mirror)."""
+    return _FLIP_HANDEDNESS.get(label or "", "Unknown")
 
 
 @dataclass
@@ -99,7 +114,8 @@ class HandDetector:
         score = 0.0
         if getattr(result, "handedness", None):
             cat = result.handedness[0][0]
-            handed = cat.category_name or "Unknown"
+            # Dibalik: frame sudah di-mirror, label MediaPipe mengikuti gambar.
+            handed = real_handedness(cat.category_name)
             score = float(cat.score)
         h, w = frame_bgr.shape[:2]
         return HandObservation(

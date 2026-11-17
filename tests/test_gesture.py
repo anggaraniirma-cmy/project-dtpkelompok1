@@ -56,6 +56,24 @@ def test_tangan_kiri_ditolak():
     res = CLF.classify(obs)
     assert res.gesture is None
     assert not res.hand_ok
+    assert "tangan kanan" in res.reason.lower()
+
+
+def test_tangan_kanan_diterima_dan_unknown_diizinkan():
+    """Label 'Right' lolos; 'Unknown' (label lemah) tidak memblokir pengunjung."""
+    for label in ("Right", "Unknown"):
+        obs = make_hand(CASES["A"], handedness=label)
+        assert CLF.classify(obs).gesture == "A"
+
+
+def test_label_mediapipe_dibalik_setelah_frame_dimirror():
+    """Frame di-mirror sebelum inferensi, jadi label MediaPipe kebalikannya."""
+    from app.cv.landmarks import real_handedness
+
+    assert real_handedness("Left") == "Right"    # mirip tangan kiri -> sebenarnya kanan
+    assert real_handedness("Right") == "Left"
+    assert real_handedness("Unknown") == "Unknown"
+    assert real_handedness(None) == "Unknown"
 
 
 def test_kepalan_kosong_ditolak():
