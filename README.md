@@ -161,12 +161,33 @@ Setelah permainan selesai (kedua mode), tombol **AMBIL FOTO?** membuka sesi foto
 | **AMBIL FOTO** | hitung mundur 3 detik, lalu mengambil satu frame |
 | **FOTO ULANG** | membuang hasil dan kembali ke pratinjau |
 | **SIMPAN FOTO** | mengunduh PNG ke perangkat pengunjung |
+| **KIRIM KE GALERI PANITIA** | menyimpan salinan ke galeri dokumentasi di komputer panitia |
 | **SELESAI** | melepas kamera dan kembali ke beranda |
 
 Foto tidak pernah diambil otomatis, tidak disimpan sebelum tombol **SIMPAN FOTO**,
 dan tidak dikirim ke layanan mana pun — overlay digambar di `<canvas>` browser
 lalu diunduh sebagai `skomda-photo-<mode>-<timestamp>.png`. Nama file memakai
 timestamp sehingga tidak pernah menimpa foto sebelumnya.
+
+### Galeri dokumentasi (panel panitia)
+
+Menu **Galeri Foto** di panel admin menampilkan semua foto yang dikirim
+pengunjung, lengkap dengan mode, nama pemain, skor, pemenang, dan waktu.
+
+| Aksi | Keterangan |
+|---|---|
+| Klik thumbnail | pratinjau ukuran penuh (lightbox) |
+| **Unduh** | simpan berkas PNG asli ke komputer panitia |
+| **Hapus** | hapus permanen berkas + baris database (dengan konfirmasi) |
+| **Unduh semua info (CSV)** | daftar foto untuk laporan dokumentasi pameran |
+
+Berkas disimpan di `backend/data/foto/` (thumbnail di `backend/data/foto/thumb/`),
+**tidak** di-commit ke git, dan **tidak** dikirim ke internet. Batas: 8 MB per
+foto, maksimal 500 foto (yang terlama dibuang otomatis), hanya PNG/JPEG yang
+diperiksa dari *magic bytes* — bukan dari nama file kiriman.
+
+Bila panitia tidak ingin menerima foto sama sekali, jalankan backend dengan
+`SKOMDA_ALLOW_FOTO_UPLOAD=0`; tombol kirim akan ditolak server.
 
 Tombol **"Kamera bermasalah? Jawab dengan klik"** adalah jalur cadangan darurat.
 Matikan dengan `SKOMDA_ALLOW_MANUAL_ANSWER=0` bila ingin jawaban murni gesture.
@@ -262,6 +283,9 @@ dibaca ulang saat kamera dinyalakan, jadi perubahan berlaku pada sesi berikutnya
 | `SKOMDA_CAM_INDEX` | `0` | index webcam |
 | `SKOMDA_ALLOW_MANUAL_ANSWER` | `1` | `0` = jawaban murni gesture |
 | `SKOMDA_ALLOW_FEED` | `0` | `1` = endpoint injeksi gesture untuk demo |
+| `SKOMDA_ALLOW_FOTO_UPLOAD` | `1` | `0` = tolak foto dari pengunjung |
+| `SKOMDA_FOTO_DIR` | `backend/data/foto` | folder penyimpanan foto dokumentasi |
+| `SKOMDA_FOTO_MAX_BYTES` | `8388608` | batas ukuran satu foto (8 MB) |
 | `SKOMDA_ADVANCE_GRACE` | `2.0` | jeda feedback sebelum soal berikutnya (detik) |
 | `SKOMDA_ABANDON_AFTER` | `120` | sesi ditutup bila ditinggal selama ini (detik) |
 
@@ -272,7 +296,7 @@ dibaca ulang saat kamera dinyalakan, jadi perubahan berlaku pada sesi berikutnya
 ## Pengujian
 
 ```bash
-.venv\Scripts\python.exe -m pytest -q            # harus 144 passed
+.venv\Scripts\python.exe -m pytest -q            # harus 163 passed
 .venv\Scripts\python.exe tests\manual_camera_check.py
 .venv\Scripts\python.exe tests\manual_camera_check.py --gui
 
@@ -308,6 +332,7 @@ kunci per pemain benar-benar dieksekusi.
 | API | `routers/battle.py` | `/api/battle/{start,state,answer,next,timeout,result,reset}` |
 | WebSocket | `routers/cv.py` (`/ws/battle`) | status kamera dua pemain + jawaban terkunci |
 | Skema DB | `database.py` (`_migrasi_kolom`) | kolom `mode`, `pemain_1/2`, `skor_1/2`, `benar_1/2`, `pemain` |
+| Galeri foto | `galeri.py` + `routers/galeri.py` + `routers/admin.py` | simpan/baca/hapus dokumentasi foto |
 
 Rumus poin dipakai bersama kedua mode (`game/engine.py: hitung_poin`), jadi skor
 single player dan battle selalu sebanding: **10 poin + bonus kecepatan maks 5**.
@@ -319,6 +344,18 @@ tetap utuh, tidak perlu menghapus `quiz.db`.
 
 ## Logo sekolah
 
-Letakkan file logo resmi sebagai `assets/img/logo-sekolah.png` di
-`frontend/visitor/` dan `frontend/admin/`. Selama belum ada, tampil monogram
-"SMK" berlatar merah Telkom. Lihat `assets/img/README-LOGO.txt` untuk spesifikasi.
+File logo resmi ada di `assets/img/logo-sekolah.png` pada **kedua** frontend
+(`frontend/visitor/` dan `frontend/admin/`). Logo dipakai di:
+
+- header panel pengunjung (`.brand-mark`)
+- **footer panel pengunjung** (`.footer-mark`)
+- layar login admin (`.lv-mark` + `.lv-foot-mark`)
+- brand sidebar admin (`.sb-mark`)
+- **footer panel admin** (`.af-mark`)
+- overlay Photo Moment (sudut kiri atas hasil foto)
+
+Spesifikasi yang disarankan: PNG latar transparan, rasio 1:1, ±512×512 px,
+di bawah 200 KB. Semua tempat memakai `object-fit: contain`, jadi logo non-kotak
+tetap utuh tanpa distorsi (ada ruang kosong di sisi). Bila file hilang, `onerror`
+otomatis mengganti ke monogram "SMK" berlatar merah Telkom sehingga tata letak
+tidak pernah rusak. Lihat `assets/img/README-LOGO.txt` untuk detail.

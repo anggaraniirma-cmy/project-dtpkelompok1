@@ -1,0 +1,43 @@
+
+/* =========================================================================
+   FOOTER PANEL ADMIN
+   Logo sekolah diambil dari assets/img/logo-sekolah.png; bila berkas tidak
+   ada, onerror mengganti ke monogram "SMK" sehingga tata letak tidak rusak.
+   ========================================================================= */
+.admin-footer {
+  margin-top: auto;
+  background: var(--navy);
+  color: rgba(255, 255, 255, 0.6);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 18px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 18px; flex-wrap: wrap;
+}
+
+.af-brand { display: flex; align-items: center; gap: 11px; }
+.af-mark {
+  position: relative; width: 34px; height: 34px; flex: none;
+  border-radius: 9px; overflow: hidden;
+  background: var(--red); color: #fff;
+  display: grid; place-items: center;
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.04em;
+}
+.af-mark img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: contain; background: #fff;
+}
+.af-mark span { position: relative; z-index: 0; }
+.af-mark:not(.is-empty) span { display: none; }
+.af-mark.is-empty img { display: none; }
+
+.af-brand strong {
+  display: block; color: #fff; font-size: 11px; font-weight: 800;
+  letter-spacing: 0.07em;
+}
+.af-brand p { font-size: 10.5px; color: rgba(255, 255, 255, 0.5); }
+.af-meta { display: flex; gap: 18px; font-size: 10.5px; flex-wrap: wrap; }
+
+@media (max-width: 720px) {
+  .admin-footer { padding: 16px 18px; }
+  .af-meta { width: 100%; gap: 10px; }
+}

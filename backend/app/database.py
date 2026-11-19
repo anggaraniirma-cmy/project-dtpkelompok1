@@ -80,6 +80,25 @@ CREATE TABLE IF NOT EXISTS pengaturan (
     nilai      TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- Galeri dokumentasi: foto hasil Photo Moment yang DIKIRIM pengunjung secara
+-- sadar (tombol "Kirim ke Galeri Panitia"). File biner disimpan di folder
+-- backend/data/foto/, tabel ini hanya metadata + nama file.
+CREATE TABLE IF NOT EXISTS galeri_foto (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    nama_file   TEXT NOT NULL UNIQUE,
+    sesi_id     TEXT,
+    mode        TEXT NOT NULL DEFAULT 'single',
+    pemain_1    TEXT,
+    pemain_2    TEXT,
+    skor_1      INTEGER,
+    skor_2      INTEGER,
+    pemenang    TEXT,
+    ukuran      INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_galeri_created ON galeri_foto(created_at DESC);
 """
 
 # Nilai default & batas tiap pengaturan. Batas ditegakkan di backend supaya

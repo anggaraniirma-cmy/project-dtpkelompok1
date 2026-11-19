@@ -74,6 +74,31 @@ def require_admin(
     return payload
 
 
+def require_admin_media(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> dict[str, Any]:
+    """Seperti `require_admin`, tetapi juga menerima `?token=` untuk <img>.
+
+    Tag <img> di browser tidak bisa mengirim header Authorization. Endpoint
+    berkas galeri karena itu menerima token lewat query string. Token tetap
+    diverifikasi dengan aturan yang sama (HS256, role=admin, belum kedaluwarsa).
+    """
+    token = credentials.credentials if credentials and credentials.credentials else None
+    if not token:
+        token = request.query_params.get("token")
+    if not token:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            "Autentikasi diperlukan",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    payload = decode_token(token)
+    if payload.get("role") != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Akses ditolak")
+    return payload
+
+
 class LoginThrottle:
     """Pembatas percobaan login sederhana (anti brute force, in-memory)."""
 

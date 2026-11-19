@@ -16,6 +16,10 @@ PROJECT_DIR = BACKEND_DIR.parent
 DATA_DIR = Path(os.getenv("SKOMDA_DATA_DIR", str(BACKEND_DIR / "data")))
 MODEL_PATH = Path(os.getenv("SKOMDA_MODEL", str(BACKEND_DIR / "models" / "hand_landmarker.task")))
 
+# Folder penyimpanan foto dokumentasi (galeri panitia). Dibuat saat dipakai.
+FOTO_DIR = Path(os.getenv("SKOMDA_FOTO_DIR", str(DATA_DIR / "foto")))
+FOTO_MAX_BYTES = int(os.getenv("SKOMDA_FOTO_MAX_BYTES", str(8 * 1024 * 1024)))
+
 HOST = os.getenv("SKOMDA_HOST", "127.0.0.1")
 PORT = int(os.getenv("SKOMDA_PORT", "8000"))
 

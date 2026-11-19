@@ -565,11 +565,19 @@ main { flex: 1; }
 }
 .footer-brand { display: flex; align-items: center; gap: 12px; }
 .footer-mark {
-  width: 36px; height: 36px; border-radius: 9px; flex: none;
+  width: 38px; height: 38px; border-radius: 9px; flex: none;
   background: var(--red); color: #fff;
   display: grid; place-items: center;
   font-size: 10.5px; font-weight: 800;
+  position: relative; overflow: hidden;
 }
+.footer-mark img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: contain; background: #fff;
+}
+.footer-mark .mark-fallback { position: relative; z-index: 0; }
+.footer-mark:not(.is-empty) .mark-fallback { display: none; }
+.footer-mark.is-empty img { display: none; }
 .footer-brand strong { display: block; color: #fff; font-size: 11.5px; font-weight: 800; letter-spacing: 0.07em; }
 .footer-brand p { font-size: 11px; }
 .footer-meta { display: flex; gap: 20px; font-size: 11px; }

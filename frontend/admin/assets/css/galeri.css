@@ -1,0 +1,115 @@
+
+/* =========================================================================
+   GALERI FOTO DOKUMENTASI (panel panitia)
+   Ditaruh di akhir agar aturan inti admin.css tidak berubah.
+   ========================================================================= */
+.galeri-note {
+  font-size: 11.5px; color: var(--slate);
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: var(--radius-s); padding: 11px 14px; margin-bottom: 16px;
+  line-height: 1.6;
+}
+.galeri-note b { color: var(--ink); }
+.galeri-note code {
+  font-family: var(--mono); font-size: 10.5px;
+  background: var(--white); border: 1px solid var(--line);
+  padding: 1px 5px; border-radius: 4px;
+}
+
+.galeri-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 14px; margin-bottom: 18px;
+}
+
+.foto-card {
+  background: var(--white); border: 1px solid var(--line);
+  border-radius: var(--radius); overflow: hidden;
+  box-shadow: var(--shadow-sm); transition: 0.2s var(--ease);
+  display: flex; flex-direction: column;
+}
+.foto-card:hover { box-shadow: var(--shadow); border-color: var(--line-strong); }
+
+.foto-thumb {
+  position: relative; display: block; aspect-ratio: 4 / 3;
+  background: var(--navy); overflow: hidden; cursor: zoom-in;
+  border: 0; padding: 0; width: 100%;
+}
+.foto-thumb img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  transition: transform 0.3s var(--ease);
+}
+.foto-card:hover .foto-thumb img { transform: scale(1.03); }
+.foto-thumb .zoom-hint {
+  position: absolute; inset: auto 0 0 0;
+  background: linear-gradient(transparent, rgba(6, 12, 22, 0.72));
+  color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  padding: 18px 10px 7px; text-align: right;
+  opacity: 0; transition: 0.2s;
+}
+.foto-card:hover .foto-thumb .zoom-hint { opacity: 1; }
+.foto-thumb.is-broken {
+  display: grid; place-items: center;
+  color: rgba(255, 255, 255, 0.45); font-size: 10.5px; text-align: center;
+  padding: 12px;
+}
+
+.foto-badge {
+  position: absolute; top: 8px; left: 8px;
+  font-family: var(--mono); font-size: 9px; font-weight: 800;
+  letter-spacing: 0.08em; padding: 3px 7px; border-radius: 5px;
+  background: rgba(6, 12, 22, 0.72); color: #fff; backdrop-filter: blur(3px);
+}
+.foto-badge.is-battle { background: rgba(228, 0, 43, 0.88); }
+
+.foto-body { padding: 11px 12px 12px; display: flex; flex-direction: column; gap: 5px; }
+.foto-title { font-size: 12px; font-weight: 700; line-height: 1.35; }
+.foto-sub { font-size: 10.5px; color: var(--slate); line-height: 1.45; }
+.foto-sub b { color: var(--ink); }
+.foto-meta {
+  font-family: var(--mono); font-size: 9.5px; color: var(--slate-400);
+  letter-spacing: 0.02em;
+}
+.foto-actions { display: flex; gap: 6px; margin-top: 6px; }
+.foto-actions .btn { flex: 1; padding: 6px 8px; font-size: 10.5px; }
+
+.hasil-tag {
+  display: inline-block; font-size: 9.5px; font-weight: 800;
+  letter-spacing: 0.06em; padding: 2px 7px; border-radius: 5px;
+  background: var(--ok-tint); color: var(--ok); align-self: flex-start;
+}
+.hasil-tag.is-seri { background: rgba(217, 119, 6, 0.12); color: var(--warn); }
+.hasil-tag.is-battle { background: var(--red-tint); color: var(--red); }
+
+/* lightbox */
+.lightbox {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(6, 12, 22, 0.9);
+  display: none; place-content: center; justify-items: center;
+  padding: 28px; gap: 14px;
+}
+.lightbox.is-show { display: grid; }
+.lightbox img {
+  max-width: min(1100px, 94vw); max-height: 78vh;
+  border-radius: 12px; box-shadow: var(--shadow-lg);
+  background: var(--navy);
+}
+.lightbox-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  justify-content: center;
+}
+.lightbox-bar .lb-info {
+  color: rgba(255, 255, 255, 0.72); font-size: 11.5px;
+  font-family: var(--mono);
+}
+.lightbox .btn-ghost {
+  background: rgba(255, 255, 255, 0.1); color: #fff;
+  border-color: rgba(255, 255, 255, 0.24);
+}
+.lightbox .btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.18); border-color: #fff; color: #fff;
+}
+
+@media (max-width: 720px) {
+  .galeri-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .foto-actions { flex-direction: column; }
+}

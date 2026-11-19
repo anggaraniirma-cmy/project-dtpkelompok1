@@ -31,6 +31,7 @@
     context: null,      // { mode, hasil }
     snapshotted: false,
     saving: false,
+    sent: false,        // sudah dikirim ke galeri panitia (sekali per foto)
     countdownTimer: null,
     logo: null,         // HTMLImageElement logo sekolah (bila tersedia)
   };
@@ -397,9 +398,11 @@
     const snap = $('#btnSnap');
     const retake = $('#btnRetake');
     const save = $('#btnSavePhoto');
+    const send = $('#btnSendPhoto');
     if (snap) snap.disabled = !state.canSnap;
     if (retake) retake.disabled = !state.canRetake;
     if (save) save.disabled = !state.canSave;
+    if (send) send.disabled = !state.canSave || P.sent;
   }
 
   /* -------------------------------------------------------------- actions */
@@ -417,6 +420,7 @@
         composePhoto(frame, P.context);
         setPlaceholder(null);
         setButtons({ canSnap: true, canRetake: true, canSave: true });
+        P.sent = false;
         if (btn) btn.textContent = 'AMBIL FOTO';
         $('#photoTip').textContent =
           'Foto siap. Tekan SIMPAN FOTO untuk mengunduh, atau FOTO ULANG untuk mencoba lagi.';
@@ -428,7 +432,6 @@
         setButtons({ canSnap: true, canRetake: false, canSave: false });
       }
     };
-
     if (!useCountdown) {
       await take();
       return;
@@ -479,9 +482,72 @@
     }
   }
 
+  /**
+   * Kirim foto ke galeri panitia (komputer ini, bukan internet).
+   * Hanya berjalan bila pengunjung menekan tombolnya — tidak pernah otomatis.
+   */
+  async function sendToGaleri() {
+    if (!P.snapshotted) {
+      toast('Ambil foto dulu sebelum mengirim.', true);
+      return;
+    }
+    if (P.sent) return;
+
+    const btn = $('#btnSendPhoto');
+    const labelAsli = btn ? btn.textContent : 'KIRIM KE GALERI PANITIA';
+    if (btn) { btn.disabled = true; btn.textContent = 'MENGIRIM…'; }
+
+    try {
+      const blob = await new Promise((resolve) => P.ctx.canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('Gagal menyiapkan berkas foto.');
+
+      const h = (P.context && P.context.hasil) || {};
+      const isBattle = P.context.mode === 'battle';
+      const fd = new FormData();
+      fd.append('file', blob, 'skomda-photo.png');
+      fd.append('mode', isBattle ? 'battle' : 'single');
+      if (h.sesi_id) fd.append('sesi_id', h.sesi_id);
+      if (isBattle && h.pemain) {
+        const p1 = h.pemain['1'] || h.pemain[1] || {};
+        const p2 = h.pemain['2'] || h.pemain[2] || {};
+        fd.append('pemain_1', p1.nama || 'Player 1');
+        fd.append('pemain_2', p2.nama || 'Player 2');
+        fd.append('skor_1', String(p1.skor ?? 0));
+        fd.append('skor_2', String(p2.skor ?? 0));
+        const menang = h.seri
+          ? 'SERI'
+          : ((h.pemenang === 1 ? p1.nama : p2.nama) || (h.pemenang === 1 ? 'Player 1' : 'Player 2'));
+        fd.append('pemenang', menang);
+      } else {
+        fd.append('pemain_1', 'Single Player');
+        fd.append('skor_1', String(h.skor ?? 0));
+        fd.append('pemenang', h.predikat || 'SELESAI');
+      }
+
+      const res = await fetch(`${API}/api/galeri/foto`, { method: 'POST', body: fd });
+      let data = null;
+      try { data = await res.json(); } catch (_) {}
+      if (!res.ok) {
+        throw new Error((data && data.detail) || `Gagal mengirim (${res.status})`);
+      }
+
+      P.sent = true;
+      if (btn) btn.textContent = 'TERKIRIM ✓';
+      $('#photoTip').textContent =
+        'Foto sudah masuk galeri panitia. Kamu tetap bisa menyimpannya sendiri.';
+      toast('Foto terkirim ke galeri panitia.');
+    } catch (err) {
+      if (btn) btn.textContent = labelAsli;
+      toast('Gagal mengirim foto: ' + err.message, true);
+    } finally {
+      if (btn) btn.disabled = P.sent || !P.snapshotted;
+    }
+  }
+
   async function retake() {
     P.frame = null;
     P.snapshotted = false;
+    P.sent = false;
     setButtons({ canSnap: true, canRetake: false, canSave: false });
     setPlaceholder('Menyiapkan kamera…');
     $('#photoTip').textContent = 'Hadapkan wajah ke kamera, lalu tekan AMBIL FOTO.';
@@ -583,6 +649,9 @@
 
     const saveBtn = $('#btnSavePhoto');
     if (saveBtn) saveBtn.addEventListener('click', downloadPhoto);
+
+    const sendBtn = $('#btnSendPhoto');
+    if (sendBtn) sendBtn.addEventListener('click', sendToGaleri);
 
     const done = $('#btnDonePhoto');
     if (done) done.addEventListener('click', closePhoto);

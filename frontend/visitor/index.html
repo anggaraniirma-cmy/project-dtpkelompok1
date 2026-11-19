@@ -31,7 +31,7 @@
 
     <div class="header-right">
       <span class="pill" id="apiPill"><i class="dot"></i><span id="apiPillText">Menghubungkan…</span></span>
-      <a class="ghost-link" href="http://localhost:3000" target="_blank" rel="noopener">Panel Panitia</a>
+      <a class="ghost-link" href="http://localhost:3000" target="_blank" rel="noopener">Panel Pengunjung</a>
     </div>
   </div>
 </header>
@@ -532,10 +532,13 @@
           <button class="btn btn-primary btn-lg" id="btnSnap">AMBIL FOTO</button>
           <button class="btn btn-ghost btn-lg" id="btnRetake" disabled>FOTO ULANG</button>
           <button class="btn btn-ghost btn-lg" id="btnSavePhoto" disabled>SIMPAN FOTO</button>
+          <button class="btn btn-ghost btn-lg" id="btnSendPhoto" disabled>KIRIM KE GALERI PANITIA</button>
           <button class="btn btn-ghost btn-lg" id="btnDonePhoto">SELESAI</button>
         </div>
         <p class="res-foot" style="text-align:center">
           Foto disimpan langsung di perangkat ini. Tidak dikirim ke layanan mana pun.
+          Tombol <strong>KIRIM KE GALERI PANITIA</strong> hanya mengirim ke komputer panitia di
+          lokasi ini — tidak ke internet — dan hanya bila kamu menekannya.
         </p>
       </div>
     </div>
@@ -547,7 +550,11 @@
 <footer class="site-footer">
   <div class="wrap footer-inner">
     <div class="footer-brand">
-      <span class="footer-mark">SMK</span>
+      <span class="footer-mark" id="footerMark">
+        <img src="assets/img/logo-sekolah.png" alt="Logo SMK Telkom Sidoarjo"
+             onerror="this.remove();document.getElementById('footerMark').classList.add('is-empty')" />
+        <span class="mark-fallback">SMK</span>
+      </span>
       <div>
         <strong>SMK TELKOM SIDOARJO</strong>
         <p>SKOMDA Gesture Quiz · Pameran Teknologi</p>

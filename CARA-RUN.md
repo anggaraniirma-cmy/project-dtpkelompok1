@@ -142,7 +142,7 @@ taskkill /PID <PID> /F
 ## 6. Cek cepat sebelum pameran
 
 ```bash
-# unit + integration test (tanpa kamera) — harus 144 passed
+# unit + integration test (tanpa kamera) — harus 163 passed
 .venv\Scripts\python.exe -m pytest -q
 
 # uji kamera nyata (tanpa jendela) — mode single player
@@ -187,6 +187,8 @@ Bersihkan sesi lama yang menggantung (mis. setelah listrik mati saat pameran):
 | Mode 2 Player: satu pemain tidak terbaca | Pastikan berdiri di zona masing-masing (kiri/kanan), gunakan tangan **kanan**, dan tidak berdempetan. Panel pemain menampilkan "Tangan belum terdeteksi di zona ini" atau "Tangan di luar zona". |
 | Mode 2 Player: pemain bertukar zona | Tangan paling kiri selalu jadi Player 1. Tukar posisi berdiri, atau perhatikan label PLAYER 1/PLAYER 2 di atas gambar kamera. |
 | Tombol AMBIL FOTO tidak menghasilkan apa-apa | Kamera sudah dilepas setelah permainan. Sesi foto menyalakannya kembali otomatis; bila gagal, tutup aplikasi lain yang memakai kamera lalu tekan FOTO ULANG. |
+| Galeri Foto kosong padahal pengunjung sudah foto | Foto hanya masuk bila pengunjung menekan **KIRIM KE GALERI PANITIA**. Cek juga `SKOMDA_ALLOW_FOTO_UPLOAD` tidak di-set `0`. |
+| Thumbnail galeri tidak muncul | Berkas foto mungkin dipindah/dihapus manual dari `backend/data/foto/`. Tekan **Muat ulang**; baris tanpa berkas akan menampilkan "Berkas tidak ditemukan" dan bisa dihapus. |
 | Panel menampilkan "tidak bisa menghubungi server" | Backend belum siap atau beda port. Buka http://localhost:8000/api/health lebih dulu. |
 | `Address already in use` di port 8000 | Jalankan `stop.bat`, atau set `SKOMDA_PORT=8001` (lalu `run_all.py` ikut menyesuaikan). |
 | Login admin ditolak | Password mungkin sudah diganti lewat menu Pengaturan. Reset: hapus `backend/data/quiz.db` (data soal & sesi ikut hilang) lalu jalankan ulang. |
@@ -227,7 +229,7 @@ backend/data/      quiz.db dibuat otomatis (tidak di-commit)
 frontend/admin/    panel panitia  (:3000)
 frontend/visitor/  panel pengunjung (:8080)
 scripts/           run_all.py · serve_frontend.py · download_model.py · bersihkan_sesi.py
-tests/             144 test otomatis + skrip cek kamera
+tests/             163 test otomatis + skrip cek kamera
 requirements.txt   daftar library Python (versi dipin & sudah diuji)
 start.bat          jalankan semua (Windows)
 stop.bat           hentikan semua bila jendela terlanjur tertutup

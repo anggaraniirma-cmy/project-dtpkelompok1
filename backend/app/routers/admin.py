@@ -4,12 +4,23 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse
 
-from .. import database
+from .. import database, galeri
 from ..schemas import PasswordPayload, PengaturanPayload, QuestionPayload
-from ..security import hash_password, require_admin, verify_password
+from ..security import (
+    hash_password,
+    require_admin,
+    require_admin_media,
+    verify_password,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
+
+# Router terpisah untuk berkas media. Prefix sama, tetapi otorisasinya memakai
+# `require_admin_media` yang juga menerima `?token=` — tag <img> di browser
+# tidak bisa mengirim header Authorization.
+media_router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
 def _fetch(conn, qid: int):
@@ -152,6 +163,44 @@ def list_sesi(limit: int = Query(default=20, ge=1, le=100)):
             "SELECT * FROM sesi_permainan ORDER BY started_at DESC LIMIT ?", (limit,)
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ------------------------------------------------------------ galeri foto
+@router.get("/galeri")
+def list_galeri(
+    limit: int = Query(default=60, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    mode: Optional[str] = Query(default=None, pattern="^(single|battle)$"),
+):
+    """Daftar foto dokumentasi (metadata saja, bukan isi berkas)."""
+    return galeri.daftar(limit=limit, offset=offset, mode=mode)
+
+
+@media_router.get("/galeri/{nama_file}", dependencies=[Depends(require_admin_media)])
+def unduh_galeri(nama_file: str, thumb: bool = False):
+    """Kirim satu berkas foto untuk pratinjau / unduhan panitia.
+
+    Menerima header `Authorization: Bearer …` (unduhan via fetch) maupun
+    `?token=…` (pratinjau lewat tag <img>). `?thumb=1` mengirim versi kecil
+    untuk grid galeri.
+    """
+    path = galeri.ambil_file(nama_file, thumb=thumb)
+    if path is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Foto tidak ditemukan")
+    media = "image/png" if path.suffix == ".png" else "image/jpeg"
+    # Cache boleh singkat: nama file unik & tidak pernah ditimpa.
+    return FileResponse(
+        path,
+        media_type=media,
+        headers={"Cache-Control": "private, max-age=300"},
+    )
+
+
+@router.delete("/galeri/{foto_id}", status_code=status.HTTP_200_OK)
+def hapus_galeri(foto_id: int):
+    if not galeri.hapus(foto_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Foto tidak ditemukan")
+    return {"ok": True, "id": foto_id}
 
 
 # ------------------------------------------------------------ pengaturan game

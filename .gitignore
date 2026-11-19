@@ -13,6 +13,8 @@ backend/data/*.db-wal
 backend/data/*.db-shm
 backend/data/.jwt_secret
 backend/data/calibration/
+# Foto dokumentasi pengunjung + thumbnail-nya: DATA PRIBADI, jangan di-commit.
+backend/data/foto/
 *.sqlite3
 
 # --- Model MediaPipe ------------------------------------------------------

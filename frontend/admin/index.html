@@ -8,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/admin.css" />
+<link rel="stylesheet" href="assets/css/galeri.css" />
+<link rel="stylesheet" href="assets/css/footer.css" />
 </head>
 <body>
 
@@ -32,7 +34,12 @@
          sebelum dipakai di pameran.</p>
     </div>
     <div class="lv-grid" aria-hidden="true"></div>
-    <div class="lv-foot">Computer Vision · MediaPipe · OpenCV</div>
+    <div class="lv-foot">
+      <span class="lv-foot-mark">
+        <img src="assets/img/logo-sekolah.png" alt="Logo SMK Telkom Sidoarjo" />
+      </span>
+      <span>Computer Vision · MediaPipe · OpenCV</span>
+    </div>
   </div>
 
   <div class="login-form-wrap">
@@ -101,6 +108,10 @@
       <button class="nav-item" data-view="sessions">
         <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 5v5.6l4 2.4-.9 1.6-5.1-3V7z"/></svg>
         Riwayat Sesi
+      </button>
+      <button class="nav-item" data-view="galeri">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M9 3l-1.5 2H5a2 2 0 00-2 2v11a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2h-2.5L15 3H9zm3 5a5 5 0 110 10 5 5 0 010-10z"/></svg>
+        Galeri Foto
       </button>
       <button class="nav-item" data-view="settings">
         <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 8a4 4 0 100 8 4 4 0 000-8zm9 4a7.9 7.9 0 01-.1 1.2l2 1.6-2 3.4-2.4-1a8 8 0 01-2 1.2l-.4 2.6h-4l-.4-2.6a8 8 0 01-2-1.2l-2.4 1-2-3.4 2-1.6A7.9 7.9 0 013 12c0-.4 0-.8.1-1.2l-2-1.6 2-3.4 2.4 1a8 8 0 012-1.2L8 3h4l.4 2.6a8 8 0 012 1.2l2.4-1 2 3.4-2 1.6c.1.4.2.8.2 1.2z"/></svg>
@@ -395,6 +406,33 @@
         </article>
       </section>
 
+      <!-- ---------- GALERI FOTO ---------- -->
+      <section class="view" id="view-galeri">
+        <div class="toolbar">
+          <select id="galeriMode" class="select">
+            <option value="">Semua mode</option>
+            <option value="battle">2 Player Battle</option>
+            <option value="single">Single Player</option>
+          </select>
+          <button class="btn btn-ghost" id="btnRefreshGaleri">Muat ulang</button>
+          <button class="btn btn-primary" id="btnUnduhSemua">Unduh semua info (CSV)</button>
+        </div>
+
+        <p class="galeri-note">
+          Foto masuk ke sini hanya bila pengunjung menekan <b>KIRIM KE GALERI PANITIA</b>
+          pada sesi Photo Moment. Berkas tersimpan di komputer ini
+          (<code>backend/data/foto/</code>) dan tidak pernah diunggah ke internet.
+        </p>
+
+        <div class="galeri-grid" id="galeriGrid">
+          <p class="empty">Memuat foto…</p>
+        </div>
+
+        <div class="pager">
+          <span id="galeriInfo" class="mono">—</span>
+        </div>
+      </section>
+
       <!-- ---------- SETTINGS ---------- -->
       <section class="view" id="view-settings">
         <div class="settings-grid">
@@ -505,6 +543,24 @@
       </section>
 
     </main>
+
+    <footer class="admin-footer">
+      <div class="af-brand">
+        <span class="af-mark">
+          <img src="assets/img/logo-sekolah.png" alt="Logo SMK Telkom Sidoarjo"
+               onerror="this.remove();this.parentElement.classList.add('is-empty')" />
+          <span>SMK</span>
+        </span>
+        <div>
+          <strong>SMK TELKOM SIDOARJO</strong>
+          <p>SKOMDA Gesture Quiz · Panel Panitia</p>
+        </div>
+      </div>
+      <div class="af-meta">
+        <span>Computer Vision · MediaPipe · OpenCV</span>
+        <span id="adminFooterYear">© 2026</span>
+      </div>
+    </footer>
   </div>
 </div>
 
@@ -520,6 +576,15 @@
       <button class="btn btn-ghost" id="modalCancel">Batal</button>
       <button class="btn btn-danger" id="modalConfirm">Hapus</button>
     </div>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox">
+  <img id="lightboxImg" alt="Foto dokumentasi" />
+  <div class="lightbox-bar">
+    <span class="lb-info" id="lightboxInfo">—</span>
+    <a class="btn btn-ghost btn-sm" id="lightboxDownload" download>Unduh</a>
+    <button class="btn btn-ghost btn-sm" id="lightboxClose">Tutup</button>
   </div>
 </div>
 

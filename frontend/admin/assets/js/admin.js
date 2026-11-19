@@ -144,6 +144,7 @@ const VIEW_META = {
   questions: ['Bank Pertanyaan', 'Kelola semua soal yang dipakai di panel pengunjung'],
   editor: ['Tambah Pertanyaan', 'Buat atau ubah soal beserta kunci jawabannya'],
   sessions: ['Riwayat Sesi', 'Hasil permainan pengunjung yang tersimpan'],
+  galeri: ['Galeri Foto', 'Dokumentasi Photo Moment dari pengunjung'],
   settings: ['Pengaturan', 'Atur jalannya permainan dan keamanan akun panitia'],
 };
 
@@ -159,6 +160,7 @@ function goTo(view) {
   if (view === 'dashboard') loadDashboard();
   if (view === 'questions') loadQuestions();
   if (view === 'sessions') loadSessions();
+  if (view === 'galeri') loadGaleri();
   if (view === 'settings') loadSettings();
   if (view === 'editor' && !state.editingId) resetForm();
 }
@@ -571,6 +573,181 @@ async function loadSessions() {
   }
 }
 
+/* -------------------------------------------------------------- galeri foto */
+const galeriState = { items: [], total: 0, mode: '', limit: 60 };
+
+function ukuranTeks(bytes) {
+  if (!bytes) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function tanggalTeks(iso) {
+  if (!iso) return '—';
+  // "2026-11-19 08:15:00" -> "19 Nov 2026 · 08.15"
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!m) return iso;
+  const bulan = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+                 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  return `${Number(m[3])} ${bulan[Number(m[2]) - 1]} ${m[1]} · ${m[4]}.${m[5]}`;
+}
+
+/** URL berkas foto — token dikirim sebagai query agar bisa dipakai di <img>. */
+function fotoUrl(nama, thumb = false) {
+  const q = `token=${encodeURIComponent(state.token)}` + (thumb ? '&thumb=1' : '');
+  return `${API}/api/admin/galeri/${encodeURIComponent(nama)}?${q}`;
+}
+
+function kartuFoto(f) {
+  const isBattle = f.mode === 'battle';
+  let judul;
+  let sub;
+  if (isBattle) {
+    judul = `${escapeHtml(f.pemain_1 || 'Player 1')} vs ${escapeHtml(f.pemain_2 || 'Player 2')}`;
+    sub = `<b>${f.skor_1 ?? 0}</b> – <b>${f.skor_2 ?? 0}</b> · ${
+      f.pemenang === 'SERI' ? 'SERI' : `menang: ${escapeHtml(f.pemenang || '—')}`}`;
+  } else {
+    judul = escapeHtml(f.pemain_1 || 'Single Player');
+    sub = `Skor <b>${f.skor_1 ?? 0}</b> · ${escapeHtml(f.pemenang || 'SELESAI')}`;
+  }
+  const tagClass = isBattle
+    ? (f.pemenang === 'SERI' ? 'hasil-tag is-seri' : 'hasil-tag is-battle')
+    : 'hasil-tag';
+
+  return `
+    <article class="foto-card" data-id="${f.id}" data-nama="${escapeHtml(f.nama_file)}">
+      <button class="foto-thumb" data-zoom="${escapeHtml(f.nama_file)}" type="button"
+              aria-label="Perbesar foto ${escapeHtml(f.nama_file)}">
+        <span class="foto-badge ${isBattle ? 'is-battle' : ''}">${isBattle ? '2P' : '1P'}</span>
+        <img src="${fotoUrl(f.nama_file, true)}" alt="Foto dokumentasi ${escapeHtml(f.nama_file)}"
+             loading="eager" decoding="async" />
+        <span class="zoom-hint">KLIK UNTUK PERBESAR</span>
+      </button>
+      <div class="foto-body">
+        <span class="${tagClass}">${isBattle ? '2 PLAYER BATTLE' : 'SINGLE PLAYER'}</span>
+        <span class="foto-title">${judul}</span>
+        <span class="foto-sub">${sub}</span>
+        <span class="foto-meta">${tanggalTeks(f.created_at)} · ${ukuranTeks(f.ukuran)}</span>
+        <div class="foto-actions">
+          <a class="btn btn-ghost" href="${fotoUrl(f.nama_file)}"
+             download="${escapeHtml(f.nama_file)}">Unduh</a>
+          <button class="btn btn-ghost" data-hapus="${f.id}">Hapus</button>
+        </div>
+      </div>
+    </article>`;
+}
+
+async function loadGaleri() {
+  const grid = $('#galeriGrid');
+  if (!grid) return;
+  galeriState.mode = $('#galeriMode') ? $('#galeriMode').value : '';
+  grid.innerHTML = '<p class="empty">Memuat foto…</p>';
+  try {
+    const qs = new URLSearchParams({ limit: String(galeriState.limit) });
+    if (galeriState.mode) qs.set('mode', galeriState.mode);
+    const d = await api('/api/admin/galeri?' + qs.toString());
+    galeriState.items = d.items || [];
+    galeriState.total = d.total || 0;
+
+    grid.innerHTML = galeriState.items.length
+      ? galeriState.items.map(kartuFoto).join('')
+      : `<p class="empty">Belum ada foto. Foto masuk setelah pengunjung menekan
+           <b>KIRIM KE GALERI PANITIA</b> pada sesi Photo Moment.</p>`;
+
+    const info = $('#galeriInfo');
+    if (info) {
+      info.textContent = galeriState.items.length
+        ? `Menampilkan ${galeriState.items.length} dari ${galeriState.total} foto`
+        : `0 foto`;
+    }
+
+    // Tandai thumbnail yang gagal dimuat agar tidak tampak kotak kosong.
+    grid.querySelectorAll('.foto-thumb img').forEach((img) => {
+      img.addEventListener('error', () => {
+        const thumb = img.closest('.foto-thumb');
+        if (!thumb || thumb.classList.contains('is-broken')) return;
+        thumb.classList.add('is-broken');
+        img.remove();
+        thumb.insertAdjacentHTML('beforeend', '<span>Berkas tidak ditemukan</span>');
+      });
+    });
+  } catch (err) {
+    grid.innerHTML = `<p class="empty">${escapeHtml(err.message)}</p>`;
+    toast(err.message);
+  }
+}
+
+function bukaLightbox(nama) {
+  const item = galeriState.items.find((f) => f.nama_file === nama);
+  const box = $('#lightbox');
+  const img = $('#lightboxImg');
+  if (!box || !img) return;
+  img.src = fotoUrl(nama);
+  $('#lightboxInfo').textContent = item
+    ? `${item.mode === 'battle'
+        ? `${item.pemain_1 || 'P1'} ${item.skor_1 ?? 0} – ${item.skor_2 ?? 0} ${item.pemain_2 || 'P2'}`
+        : `Single Player · ${item.skor_1 ?? 0} poin`} · ${tanggalTeks(item.created_at)}`
+    : nama;
+  const dl = $('#lightboxDownload');
+  if (dl) { dl.href = fotoUrl(nama); dl.download = nama; }
+  box.classList.add('is-show');
+}
+
+function tutupLightbox() {
+  const box = $('#lightbox');
+  if (box) box.classList.remove('is-show');
+}
+
+async function hapusFoto(id, nama) {
+  if (!confirm(`Hapus foto ${nama}?\n\nBerkas akan dihapus permanen dari komputer ini.`)) return;
+  try {
+    await api(`/api/admin/galeri/${id}`, { method: 'DELETE' });
+    toast('Foto dihapus.', false);
+    loadGaleri();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+/** Unduh daftar foto sebagai CSV — untuk laporan dokumentasi pameran. */
+async function unduhCsvGaleri() {
+  let items = galeriState.items;
+  if (!items.length) {
+    toast('Belum ada foto untuk diekspor.');
+    return;
+  }
+  // Ambil sampai 200 baris agar ekspor tidak terpotong batas tampilan.
+  try {
+    const qs = new URLSearchParams({ limit: '200' });
+    if (galeriState.mode) qs.set('mode', galeriState.mode);
+    const d = await api('/api/admin/galeri?' + qs.toString());
+    if (d.items && d.items.length) items = d.items;
+  } catch (_) { /* pakai data yang sudah tampil */ }
+  const header = ['id', 'nama_file', 'mode', 'pemain_1', 'pemain_2',
+                  'skor_1', 'skor_2', 'pemenang', 'ukuran_byte', 'waktu', 'sesi_id'];
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [header.join(',')].concat(items.map((f) => [
+    f.id, f.nama_file, f.mode, f.pemain_1, f.pemain_2, f.skor_1, f.skor_2,
+    f.pemenang, f.ukuran, f.created_at, f.sesi_id,
+  ].map(esc).join(',')));
+
+  const ts = new Date();
+  const pad = (v) => String(v).padStart(2, '0');
+  const stamp = `${ts.getFullYear()}${pad(ts.getMonth() + 1)}${pad(ts.getDate())}`
+    + `-${pad(ts.getHours())}${pad(ts.getMinutes())}`;
+  const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `skomda-galeri-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  toast('Daftar foto diekspor sebagai CSV.', false);
+}
+
 /* -------------------------------------------------------------- listeners */
 function bind() {
   $('#loginForm').addEventListener('submit', doLogin);
@@ -656,6 +833,36 @@ function bind() {
   });
 
   $('#btnRefreshSesi').addEventListener('click', loadSessions);
+
+  // galeri foto
+  const refreshGaleri = $('#btnRefreshGaleri');
+  if (refreshGaleri) refreshGaleri.addEventListener('click', loadGaleri);
+  const galeriMode = $('#galeriMode');
+  if (galeriMode) galeriMode.addEventListener('change', loadGaleri);
+  const csvBtn = $('#btnUnduhSemua');
+  if (csvBtn) csvBtn.addEventListener('click', unduhCsvGaleri);
+
+  const grid = $('#galeriGrid');
+  if (grid) {
+    grid.addEventListener('click', (e) => {
+      const zoom = e.target.closest('[data-zoom]');
+      const del = e.target.closest('[data-hapus]');
+      if (zoom) bukaLightbox(zoom.dataset.zoom);
+      if (del) {
+        const card = del.closest('.foto-card');
+        hapusFoto(Number(del.dataset.hapus), card ? card.dataset.nama : '');
+      }
+    });
+  }
+
+  const lbClose = $('#lightboxClose');
+  if (lbClose) lbClose.addEventListener('click', tutupLightbox);
+  const lightbox = $('#lightbox');
+  if (lightbox) {
+    lightbox.addEventListener('click', (e) => {
+      if (e.target.id === 'lightbox') tutupLightbox();
+    });
+  }
 }
 
 /* ------------------------------------------------------------------- init */
@@ -663,6 +870,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   bind();
   updatePreview();
   loadKategori();
+
+  const fy = document.getElementById('adminFooterYear');
+  if (fy) fy.textContent = `© ${new Date().getFullYear()} SMK Telkom Sidoarjo`;
 
   if (state.token) {
     await enterApp();
