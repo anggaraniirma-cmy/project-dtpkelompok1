@@ -45,7 +45,16 @@ CREATE TABLE IF NOT EXISTS sesi_permainan (
     skor         INTEGER NOT NULL DEFAULT 0,
     status       TEXT NOT NULL DEFAULT 'berjalan',
     started_at   TEXT NOT NULL,
-    finished_at  TEXT
+    finished_at  TEXT,
+    -- Mode 2 PLAYER BATTLE. Baris mode='single' membiarkan kolom ini NULL,
+    -- jadi skema lama tetap valid dan data lama tidak perlu diubah.
+    mode         TEXT NOT NULL DEFAULT 'single',
+    pemain_1     TEXT,
+    pemain_2     TEXT,
+    skor_1       INTEGER,
+    skor_2       INTEGER,
+    benar_1      INTEGER,
+    benar_2      INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS jawaban_permainan (
@@ -56,7 +65,9 @@ CREATE TABLE IF NOT EXISTS jawaban_permainan (
     jawaban      TEXT,
     benar        INTEGER NOT NULL DEFAULT 0,
     waktu_pakai  REAL NOT NULL DEFAULT 0,
-    created_at   TEXT NOT NULL
+    created_at   TEXT NOT NULL,
+    -- NULL = jawaban mode single player; 1/2 = nomor pemain pada mode battle.
+    pemain       INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_jawaban_sesi ON jawaban_permainan(sesi_id);
@@ -126,10 +137,39 @@ def get_conn() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def _migrasi_kolom(conn: sqlite3.Connection) -> None:
+    """Tambahkan kolom baru ke database lama (CREATE TABLE IF NOT EXISTS tidak
+    menambah kolom pada tabel yang sudah ada).
+
+    Idempoten: setiap kolom diperiksa lewat PRAGMA table_info sebelum ALTER,
+    jadi aman dijalankan setiap startup dan tidak menyentuh data lama.
+    """
+    tambahan = {
+        "sesi_permainan": [
+            ("mode", "TEXT NOT NULL DEFAULT 'single'"),
+            ("pemain_1", "TEXT"),
+            ("pemain_2", "TEXT"),
+            ("skor_1", "INTEGER"),
+            ("skor_2", "INTEGER"),
+            ("benar_1", "INTEGER"),
+            ("benar_2", "INTEGER"),
+        ],
+        "jawaban_permainan": [
+            ("pemain", "INTEGER"),
+        ],
+    }
+    for tabel, kolom in tambahan.items():
+        ada = {r["name"] for r in conn.execute(f"PRAGMA table_info({tabel})").fetchall()}
+        for nama, tipe in kolom:
+            if nama not in ada:
+                conn.execute(f"ALTER TABLE {tabel} ADD COLUMN {nama} {tipe}")
+
+
 def init_db() -> None:
     """Buat skema bila belum ada + seed admin, pengaturan & contoh soal."""
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        _migrasi_kolom(conn)
         cur = conn.execute("SELECT COUNT(*) AS n FROM admin")
         if cur.fetchone()["n"] == 0:
             conn.execute(

@@ -14,11 +14,26 @@ import sqlite3
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from .. import config, database
 
 HURUF = ("A", "B", "C", "D")
+
+
+def hitung_poin(benar: bool, waktu_pakai: float, durasi: int) -> int:
+    """Poin satu jawaban. SATU rumus untuk Single Player & 2 Player Battle.
+
+    Aturannya: jawaban benar = POIN_BENAR + bonus kecepatan (maks 5 poin,
+    menurun linear terhadap durasi soal). Jawaban salah / timeout = 0.
+    Dipusatkan di sini supaya kedua mode tidak bisa menyimpang.
+    """
+    if not benar:
+        return 0
+    poin = config.POIN_BENAR
+    if durasi > 0:
+        poin += int(round(5 * max(0.0, 1 - waktu_pakai / durasi)))
+    return poin
 
 
 @dataclass
@@ -30,10 +45,13 @@ class SoalSesi:
     kategori: str
     durasi: int
     mulai: float = field(default_factory=time.monotonic)
+    # Jam yang dipakai menilai kedaluwarsa. Mode battle menyuntikkan jamnya
+    # sendiri (bisa diuji tanpa menunggu waktu nyata); default perilaku lama.
+    clock: Callable[[], float] = time.monotonic
 
     def kedaluwarsa(self) -> bool:
         """Waktu soal habis menurut jam server (bukan timer di browser)."""
-        return (time.monotonic() - self.mulai) >= self.durasi
+        return (self.clock() - self.mulai) >= self.durasi
 
 
 @dataclass
@@ -172,12 +190,8 @@ class GameEngine:
 
         waktu_pakai = round(time.monotonic() - soal.mulai, 2)
         benar = pilihan == soal.jawaban
-        poin = 0
+        poin = hitung_poin(benar, waktu_pakai, soal.durasi)
         if benar:
-            poin = config.POIN_BENAR
-            # bonus kecepatan maks 5 poin
-            if soal.durasi > 0:
-                poin += int(round(5 * max(0.0, 1 - waktu_pakai / soal.durasi)))
             sesi.benar += 1
         sesi.skor += poin
 

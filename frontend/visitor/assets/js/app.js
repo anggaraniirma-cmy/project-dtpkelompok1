@@ -25,6 +25,7 @@ const state = {
   manualMode: false,
   manualAllowed: true,
   lastQuestionKey: null,
+  lastResult: null,
 };
 
 /* ------------------------------------------------------------------ utils */
@@ -57,6 +58,9 @@ function showScreen(name) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+/* Modul lain (battle.js, photo.js) memakai helper yang SAMA agar tidak ada
+   duplikasi logika fetch/screen/toast. Diekspos di akhir file. */
+
 /* ------------------------------------------------------------ health check */
 async function checkApi() {
   const pill = $('#apiPill');
@@ -70,6 +74,7 @@ async function checkApi() {
     // menempuh jalur yang pasti ditolak server.
     state.manualAllowed = h.jawaban_manual !== false;
     if (!state.manualAllowed) $('#btnManual').style.display = 'none';
+    if (window.skomdaBattle) window.skomdaBattle.setManualAllowed(state.manualAllowed);
     return true;
   } catch (err) {
     pill.classList.remove('is-ok'); pill.classList.add('is-bad');
@@ -88,7 +93,8 @@ async function startGame() {
     if (!ok) throw new Error('Server backend belum berjalan di ' + API);
 
     // Nyalakan kamera lebih dulu agar pengunjung langsung melihat gambarnya.
-    const cam = await api('/api/cv/start', { method: 'POST' }).catch((e) => {
+    // mode=single memastikan MediaPipe hanya mendeteksi satu tangan.
+    const cam = await api('/api/cv/start?mode=single', { method: 'POST' }).catch((e) => {
       toast('Kamera: ' + e.message, true);
       return null;
     });
@@ -287,6 +293,7 @@ async function finishGame(hasil) {
   if (!hasil) {
     try { hasil = await api('/api/game/result'); } catch (_) { hasil = {}; }
   }
+  state.lastResult = hasil;   // dipakai Photo Moment single player
 
   $('#resSkor').textContent = hasil.skor ?? 0;
   $('#resBenar').textContent = hasil.benar ?? 0;
@@ -522,6 +529,15 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#btnQuit').addEventListener('click', quitGame);
   $('#btnManual').addEventListener('click', toggleManual);
 
+  // Photo Moment mode Single Player.
+  const photoBtn = $('#btnPhotoSingle');
+  if (photoBtn) {
+    photoBtn.addEventListener('click', () => {
+      if (!window.skomdaOpenPhoto || !state.lastResult) return;
+      window.skomdaOpenPhoto({ mode: 'single', hasil: state.lastResult });
+    });
+  }
+
   $$('.option').forEach((opt) => {
     opt.addEventListener('click', () => manualAnswer(opt.dataset.choice));
   });
@@ -531,8 +547,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Lepas kamera bila tab ditutup saat bermain.
   window.addEventListener('pagehide', () => {
-    if (state.screen === 'game') {
+    if (state.screen === 'game' || state.screen === 'battle') {
       navigator.sendBeacon?.(`${API}/api/cv/stop`);
     }
   });
 });
+
+/* ------------------------------------------------------------------- API */
+/* Helper bersama untuk battle.js & photo.js: satu implementasi fetch, satu
+   implementasi perpindahan layar, satu implementasi toast. */
+window.skomdaApi = api;
+window.skomdaShowScreen = showScreen;
+window.skomdaToast = toast;

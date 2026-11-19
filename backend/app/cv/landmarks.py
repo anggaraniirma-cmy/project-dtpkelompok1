@@ -92,8 +92,20 @@ class HandDetector:
 
     def detect(self, frame_bgr: np.ndarray, timestamp_ms: Optional[int] = None) -> Optional[HandObservation]:
         """Deteksi tangan pada frame BGR. Frame di-flip di dalam (lihat docstring modul)."""
+        hands = self.detect_many(frame_bgr, timestamp_ms)
+        return hands[0] if hands else None
+
+    def detect_many(
+        self, frame_bgr: np.ndarray, timestamp_ms: Optional[int] = None
+    ) -> list[HandObservation]:
+        """Deteksi hingga `num_hands` tangan sekaligus (mode 2 Player).
+
+        Urutan hasil TIDAK stabil antar frame, jadi pemanggil tidak boleh
+        mengandalkannya untuk menentukan pemain — lihat cv/players.py yang
+        memisahkan pemain berdasarkan posisi horizontal.
+        """
         if frame_bgr is None or frame_bgr.size == 0:
-            return None
+            return []
         mirrored = cv2.flip(frame_bgr, 1)
         rgb = cv2.cvtColor(mirrored, cv2.COLOR_BGR2RGB)
         rgb = np.ascontiguousarray(rgb)
@@ -107,21 +119,30 @@ class HandDetector:
             result = self._landmarker.detect_for_video(mp_image, ts)
 
         if not result.hand_landmarks:
-            return None
-        lm = result.hand_landmarks[0]
-        arr = np.array([[p.x, p.y, p.z] for p in lm], dtype=np.float32)
-        handed = "Unknown"
-        score = 0.0
-        if getattr(result, "handedness", None):
-            cat = result.handedness[0][0]
-            # Dibalik: frame sudah di-mirror, label MediaPipe mengikuti gambar.
-            handed = real_handedness(cat.category_name)
-            score = float(cat.score)
+            return []
+
         h, w = frame_bgr.shape[:2]
-        return HandObservation(
-            landmarks=arr, handedness=handed, score=score,
-            image_size=(w, h), raw=result,
-        )
+        out: list[HandObservation] = []
+        handedness = getattr(result, "handedness", None) or []
+        for i, lm in enumerate(result.hand_landmarks):
+            arr = np.array([[p.x, p.y, p.z] for p in lm], dtype=np.float32)
+            handed = "Unknown"
+            score = 0.0
+            if i < len(handedness) and handedness[i]:
+                cat = handedness[i][0]
+                # Dibalik: frame sudah di-mirror, label MediaPipe mengikuti gambar.
+                handed = real_handedness(cat.category_name)
+                score = float(cat.score)
+            out.append(
+                HandObservation(
+                    landmarks=arr, handedness=handed, score=score,
+                    image_size=(w, h), raw=result,
+                )
+            )
+        # Skor tinggi lebih dulu: bila pemanggil hanya butuh satu tangan,
+        # `detect()` mendapat deteksi paling meyakinkan.
+        out.sort(key=lambda o: o.score, reverse=True)
+        return out
 
     def close(self) -> None:
         with self._lock:

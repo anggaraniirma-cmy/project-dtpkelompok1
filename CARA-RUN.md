@@ -142,14 +142,28 @@ taskkill /PID <PID> /F
 ## 6. Cek cepat sebelum pameran
 
 ```bash
-# unit + integration test (tanpa kamera) — harus 95 passed
+# unit + integration test (tanpa kamera) — harus 144 passed
 .venv\Scripts\python.exe -m pytest -q
 
-# uji kamera nyata (tanpa jendela)
+# uji kamera nyata (tanpa jendela) — mode single player
 .venv\Scripts\python.exe tests\manual_camera_check.py
 
 # uji kamera dengan jendela preview
 .venv\Scripts\python.exe tests\manual_camera_check.py --gui
+
+# uji kamera mode 2 Player Battle (butuh dua orang berdiri berdampingan)
+.venv\Scripts\python.exe tests\manual_battle_check.py
+.venv\Scripts\python.exe tests\manual_battle_check.py --seconds 60
+```
+
+`manual_battle_check.py` mencetak persentase frame dengan dua tangan terdeteksi.
+Bila 0%, skrip menyebutkan penyebab yang perlu diperiksa (bukan mengklaim sukses).
+
+Uji integrasi terhadap backend yang sedang berjalan (stream, WebSocket dua
+pemain, photo-frame, pelepasan kamera):
+
+```bash
+.venv\Scripts\python.exe tests\live_check_battle.py http://127.0.0.1:8000
 ```
 
 Bersihkan sesi lama yang menggantung (mis. setelah listrik mati saat pameran):
@@ -170,6 +184,9 @@ Bersihkan sesi lama yang menggantung (mis. setelah listrik mati saat pameran):
 | `[X] Folder .venv tidak ditemukan` dari start.bat | Belum pernah install. Ikuti langkah 3.1. |
 | Backend hidup tapi kamera hitam | Kamera dipakai aplikasi lain (Zoom/Teams/OBS). Tutup dulu. Coba `SKOMDA_CAM_INDEX=1`. |
 | Kamera tidak terdeteksi | Permainan tetap jalan; tombol "Kamera bermasalah? Jawab dengan klik" tersedia selama `SKOMDA_ALLOW_MANUAL_ANSWER=1`. |
+| Mode 2 Player: satu pemain tidak terbaca | Pastikan berdiri di zona masing-masing (kiri/kanan), gunakan tangan **kanan**, dan tidak berdempetan. Panel pemain menampilkan "Tangan belum terdeteksi di zona ini" atau "Tangan di luar zona". |
+| Mode 2 Player: pemain bertukar zona | Tangan paling kiri selalu jadi Player 1. Tukar posisi berdiri, atau perhatikan label PLAYER 1/PLAYER 2 di atas gambar kamera. |
+| Tombol AMBIL FOTO tidak menghasilkan apa-apa | Kamera sudah dilepas setelah permainan. Sesi foto menyalakannya kembali otomatis; bila gagal, tutup aplikasi lain yang memakai kamera lalu tekan FOTO ULANG. |
 | Panel menampilkan "tidak bisa menghubungi server" | Backend belum siap atau beda port. Buka http://localhost:8000/api/health lebih dulu. |
 | `Address already in use` di port 8000 | Jalankan `stop.bat`, atau set `SKOMDA_PORT=8001` (lalu `run_all.py` ikut menyesuaikan). |
 | Login admin ditolak | Password mungkin sudah diganti lewat menu Pengaturan. Reset: hapus `backend/data/quiz.db` (data soal & sesi ikut hilang) lalu jalankan ulang. |
@@ -210,7 +227,7 @@ backend/data/      quiz.db dibuat otomatis (tidak di-commit)
 frontend/admin/    panel panitia  (:3000)
 frontend/visitor/  panel pengunjung (:8080)
 scripts/           run_all.py · serve_frontend.py · download_model.py · bersihkan_sesi.py
-tests/             95 test otomatis + skrip cek kamera
+tests/             144 test otomatis + skrip cek kamera
 requirements.txt   daftar library Python (versi dipin & sudah diuji)
 start.bat          jalankan semua (Windows)
 stop.bat           hentikan semua bila jendela terlanjur tertutup

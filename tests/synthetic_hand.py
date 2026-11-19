@@ -24,8 +24,14 @@ def make_hand(
     wrist=(0.50, 0.85),
     scale: float = 1.0,
     rotation_deg: float = 0.0,
+    offset_x: float = 0.0,
 ) -> HandObservation:
-    """Buat 21 landmark ternormalisasi sesuai konfigurasi jari."""
+    """Buat 21 landmark ternormalisasi sesuai konfigurasi jari.
+
+    `offset_x` menggeser SELURUH tangan secara horizontal (dipakai untuk
+    mensimulasikan dua pemain di zona kiri & kanan kamera). `wrist` hanya
+    menggeser titik pergelangan, jadi jangan dipakai untuk itu.
+    """
     wrist = np.array(wrist, dtype=np.float32)
     pts = np.zeros((21, 3), dtype=np.float32)
     pts[0] = [wrist[0], wrist[1], 0.0]
@@ -64,6 +70,9 @@ def make_hand(
 
     if scale != 1.0:
         pts[:, :2] = (pts[:, :2] - wrist) * scale + wrist
+
+    if offset_x:
+        pts[:, 0] += float(offset_x)
 
     if rotation_deg:
         th = np.deg2rad(rotation_deg)

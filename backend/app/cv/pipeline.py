@@ -2,21 +2,27 @@
 
 Satu thread melakukan seluruh siklus pada frame terbaru:
   1. frame diambil dari CameraStream (di-flip oleh detector)
-  2. HandLandmarker mendeteksi 21 landmark
+  2. HandLandmarker mendeteksi 21 landmark (1 tangan / maksimal `num_hands`)
   3. GestureClassifier menilai tiap jari
   4. GestureStabilizer menahan ~1 detik lalu mengunci
   5. frame + overlay dikodekan JPEG untuk MJPEG stream
 
-Konsumsi event kunci dilakukan oleh game engine lewat `pop_lock()`; pipeline
-tidak tahu apa-apa soal kuis (pemisahan tanggung jawab).
+DUA MODE
+  * mode="single" : perilaku lama, tidak diubah. Satu tangan, satu stabilizer,
+    satu antrean kunci (`pop_lock()`).
+  * mode="battle" : dua tangan, `PlayerSplitter` memisahkan pemain berdasarkan
+    posisi, dan SETIAP pemain punya stabilizer + antrean kunci sendiri
+    (`pop_locks()`). Satu tangan tidak pernah bisa mengunci dua pemain.
+
+Konsumsi event kunci dilakukan oleh game engine lewat `pop_lock()` /
+`pop_locks()`; pipeline tidak tahu apa-apa soal kuis (pemisahan tanggung jawab).
 """
 from __future__ import annotations
 
-import json
 import threading
 import time
 from dataclasses import asdict, dataclass, field
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import cv2
 import numpy as np
@@ -26,6 +32,7 @@ from . import overlay
 from .camera import CameraError, CameraStream
 from .gesture import GestureClassifier, GestureResult
 from .landmarks import HandDetector, HandObservation
+from .players import PlayerSplitter
 from .stabilizer import GestureStabilizer
 
 
@@ -43,6 +50,10 @@ class PipelineStatus:
     cooldown: float = 0.0
     error: Optional[str] = None
     frame_id: int = 0
+    mode: str = "single"
+    # mode battle: {"1": {...}, "2": {...}} — lihat _process_battle()
+    pemain: dict[str, dict[str, Any]] = field(default_factory=dict)
+    peringatan: list[str] = field(default_factory=list)
 
 
 class VisionPipeline:
@@ -50,28 +61,54 @@ class VisionPipeline:
                  detector: Optional[HandDetector] = None,
                  classifier: Optional[GestureClassifier] = None,
                  stabilizer: Optional[GestureStabilizer] = None,
-                 on_lock: Optional[Callable[[str], None]] = None):
+                 on_lock: Optional[Callable[[str], None]] = None,
+                 mode: str = "single",
+                 hold_seconds: Optional[float] = None,
+                 cooldown_seconds: Optional[float] = None,
+                 rearm_seconds: Optional[float] = None):
+        self.mode = "battle" if mode == "battle" else "single"
         self.camera = camera or CameraStream()
-        self.detector = detector or HandDetector()
+        num_hands = 2 if self.mode == "battle" else 1
+        self.detector = detector or HandDetector(num_hands=num_hands)
         self.classifier = classifier or GestureClassifier()
+
+        # Parameter stabilizer dipakai lagi untuk pemain ke-2 di mode battle
+        # supaya kedua pemain punya kepekaan yang identik.
+        self._hold = config.GESTURE_HOLD_SECONDS if hold_seconds is None else hold_seconds
+        self._cooldown = config.GESTURE_COOLDOWN_SECONDS if cooldown_seconds is None else cooldown_seconds
+        self._rearm = config.GESTURE_REARM_SECONDS if rearm_seconds is None else rearm_seconds
+
         self.stabilizer = stabilizer or GestureStabilizer(
-            hold_seconds=config.GESTURE_HOLD_SECONDS,
-            cooldown_seconds=config.GESTURE_COOLDOWN_SECONDS,
-            rearm_seconds=config.GESTURE_REARM_SECONDS,
+            hold_seconds=self._hold,
+            cooldown_seconds=self._cooldown,
+            rearm_seconds=self._rearm,
         )
+        # Stabilizer per pemain (mode battle). Stabilizer tunggal di atas tetap
+        # dipakai mode single supaya perilakunya persis sama seperti sebelumnya.
+        self.stabilizers: dict[int, GestureStabilizer] = {
+            1: self.stabilizer,
+            2: GestureStabilizer(
+                hold_seconds=self._hold,
+                cooldown_seconds=self._cooldown,
+                rearm_seconds=self._rearm,
+            ),
+        }
+        self.splitter = PlayerSplitter()
 
         self._lock = threading.Lock()
         self._on_lock = on_lock or (lambda _g: None)
-        self._state = PipelineStatus()
+        self._state = PipelineStatus(mode=self.mode)
         self._obs: Optional[HandObservation] = None
         self._result: Optional[GestureResult] = None
         self._jpeg: Optional[bytes] = None
+        self._raw_jpeg: Optional[bytes] = None
         self._fps = 0.0
         self._frames = 0
         self._fps_t0 = time.time()
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._pending_lock: Optional[str] = None
+        self._pending_player_locks: dict[int, str] = {}
         self._lock_flash_until = 0.0
         self._last_frame_id = 0
         # Sumber gesture virtual (khusus demo/pengujian): saat aktif, loop
@@ -114,6 +151,20 @@ class VisionPipeline:
     def running(self) -> bool:
         return self._running
 
+    def reset_stabilizers(self) -> None:
+        """Panggil saat soal berganti: bersihkan latch kedua pemain.
+
+        Tanpa ini, tangan yang masih terangkat di soal berikutnya bisa langsung
+        menjawab karena progres tahan dari soal sebelumnya masih tersimpan.
+        """
+        for s in self.stabilizers.values():
+            s.reset()
+
+    def disarm_stabilizers(self) -> None:
+        """Wajib lepas tangan dulu sebelum bisa mengunci lagi."""
+        for s in self.stabilizers.values():
+            s.disarm()
+
     # -- main loop ---------------------------------------------------------
     def _loop(self) -> None:
         with self._lock:
@@ -128,7 +179,10 @@ class VisionPipeline:
                 continue
             self._last_frame_id = frame_id
             try:
-                self._process(frame, frame_id)
+                if self.mode == "battle":
+                    self._process_battle(frame, frame_id)
+                else:
+                    self._process(frame, frame_id)
             except Exception as exc:  # jangan sampai thread mati diam-diam
                 with self._lock:
                     self._state.error = f"Kesalahan pemrosesan: {exc}"
@@ -151,6 +205,22 @@ class VisionPipeline:
                 return True, self._virtual_gesture
             return False, None
 
+    def _hitung_fps(self) -> float:
+        self._frames += 1
+        now = time.time()
+        if now - self._fps_t0 >= 0.5:
+            self._fps = self._frames / (now - self._fps_t0)
+            self._frames = 0
+            self._fps_t0 = now
+        return self._fps
+
+    @staticmethod
+    def _encode(img: np.ndarray, quality_override: Optional[int] = None) -> Optional[bytes]:
+        q = config.STREAM_QUALITY if quality_override is None else quality_override
+        ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), q])
+        return buf.tobytes() if ok else None
+
+    # -- pemrosesan: satu pemain (perilaku tidak diubah) -------------------
     def _process(self, frame: np.ndarray, frame_id: int) -> None:
         obs = self.detector.detect(frame)
         result: Optional[GestureResult] = None
@@ -172,12 +242,7 @@ class VisionPipeline:
             # browser terhubung. WebSocket hanya menampilkan hasilnya.
             self._on_lock(stable.locked)
 
-        self._frames += 1
-        now = time.time()
-        if now - self._fps_t0 >= 0.5:
-            self._fps = self._frames / (now - self._fps_t0)
-            self._frames = 0
-            self._fps_t0 = now
+        self._hitung_fps()
 
         # Overlay digambar pada frame yang sudah di-mirror agar posisi landmark
         # (koordinat hasil inferensi mirror) jatuh tepat di atas gambar.
@@ -189,12 +254,13 @@ class VisionPipeline:
             mirrored, result, stable.gesture, stable.progress,
             self.stabilizer.cooldown_remaining, self._fps, flash,
         )
-        ok, buf = cv2.imencode(".jpg", mirrored, [int(cv2.IMWRITE_JPEG_QUALITY), config.STREAM_QUALITY])
-        jpeg = buf.tobytes() if ok else None
+        jpeg = self._encode(mirrored)
+        raw = self._encode(mirrored, quality_override=92)
 
         fingers = {k: v.extended for k, v in (result.fingers.items() if result else [])}
         with self._lock:
             self._jpeg = jpeg
+            self._raw_jpeg = raw
             self._obs = obs
             self._result = result
             self._state = PipelineStatus(
@@ -210,6 +276,97 @@ class VisionPipeline:
                 cooldown=round(self.stabilizer.cooldown_remaining, 2),
                 error=None,
                 frame_id=frame_id,
+                mode="single",
+            )
+
+    # -- pemrosesan: dua pemain --------------------------------------------
+    def _process_battle(self, frame: np.ndarray, frame_id: int) -> None:
+        detections = self.detector.detect_many(frame)
+        split = self.splitter.assign(detections)
+        virtual, vgesture = self._active_virtual()
+
+        # 1) Klasifikasi sekali per pemain, lalu putuskan gesture yang sah.
+        hasil: dict[int, tuple[Optional[HandObservation], Optional[GestureResult], Optional[str]]] = {}
+        for p in (1, 2):
+            obs = split.hands.get(p)
+            res: Optional[GestureResult] = None
+            gesture: Optional[str] = None
+            if obs is not None:
+                res = self.classifier.classify(obs, require_right=config.REQUIRE_RIGHT_HAND)
+                gesture = res.gesture
+                # Tangan di zona pemain yang salah tidak boleh menjawab.
+                if not split.zone_ok.get(p, True):
+                    gesture = None
+            if virtual:
+                gesture = vgesture if obs is not None else None
+            hasil[p] = (obs, res, gesture)
+
+        # 2) Stabilizer DIJALANKAN SELALU untuk kedua pemain, termasuk saat
+        #    tangan tidak terdeteksi (gesture None) — itulah yang membuat latch
+        #    "wajib lepas tangan" dan re-arm bekerja secara independen.
+        stable_map = {}
+        for p in (1, 2):
+            stable = self.stabilizers[p].update(hasil[p][2])
+            stable_map[p] = stable
+            if stable.locked:
+                with self._lock:
+                    self._pending_player_locks[p] = stable.locked
+                self._lock_flash_until = time.time() + 0.6
+
+        self._hitung_fps()
+
+        # 3) Overlay dua zona.
+        mirrored = cv2.flip(frame, 1)
+        flash: Optional[dict[int, str]] = None
+        if time.time() < self._lock_flash_until:
+            flash = {p: stable_map[p].locked for p in (1, 2) if stable_map[p].locked}
+        overlay.draw_battle_overlay(
+            mirrored,
+            split,
+            {p: hasil[p][1] for p in (1, 2)},
+            {p: stable_map[p].progress for p in (1, 2)},
+            {p: stable_map[p].gesture for p in (1, 2)},
+            self._fps,
+            flash=flash or None,
+        )
+        jpeg = self._encode(mirrored)
+        raw = self._encode(mirrored, quality_override=92)
+
+        pemain_state: dict[str, dict[str, Any]] = {}
+        for p in (1, 2):
+            obs, res, gesture_mentah = hasil[p]
+            st = stable_map[p]
+            pemain_state[str(p)] = {
+                "nomor": p,
+                "terdeteksi": obs is not None,
+                "gesture": st.gesture,
+                "progress": round(st.progress, 3),
+                "reason": (res.reason if res else "Tangan tidak terdeteksi"),
+                "label": res.label if res else "",
+                "zona_ok": bool(split.zone_ok.get(p, True)),
+                "palm_x": round(split.palm_x[p], 4) if p in split.palm_x else None,
+                "cooldown": round(self.stabilizers[p].cooldown_remaining, 2),
+                "handedness": obs.handedness if obs else "None",
+            }
+
+        with self._lock:
+            self._jpeg = jpeg
+            self._raw_jpeg = raw
+            self._obs = split.hands.get(1) or split.hands.get(2)
+            self._result = None
+            self._state = PipelineStatus(
+                running=True,
+                fps=round(self._fps, 1),
+                gesture=pemain_state["1"]["gesture"],
+                progress=round(stable_map[1].progress, 3),
+                reason=pemain_state["1"]["reason"],
+                handedness=pemain_state["1"]["handedness"],
+                cooldown=round(self.stabilizers[1].cooldown_remaining, 2),
+                error=None,
+                frame_id=frame_id,
+                mode="battle",
+                pemain=pemain_state,
+                peringatan=list(split.warnings),
             )
 
     # -- konsumsi state ----------------------------------------------------
@@ -221,6 +378,15 @@ class VisionPipeline:
     def frame_jpeg(self) -> Optional[bytes]:
         with self._lock:
             return self._jpeg
+
+    def photo_jpeg(self) -> Optional[bytes]:
+        """Frame terakhir TANPA overlay, kualitas tinggi — untuk Photo Moment.
+
+        Dipakai endpoint /api/cv/photo. Foto diolah & disimpan di browser
+        (kanvas), jadi tidak pernah dikirim ke layanan luar.
+        """
+        with self._lock:
+            return self._raw_jpeg or self._jpeg
 
     def landmarks(self) -> Optional[dict[str, Any]]:
         with self._lock:
@@ -236,10 +402,16 @@ class VisionPipeline:
         }
 
     def pop_lock(self) -> Optional[str]:
-        """Event gesture terkunci; diambil sekali (dipakai game engine)."""
+        """Event gesture terkunci mode single; diambil sekali (game engine)."""
         with self._lock:
             g, self._pending_lock = self._pending_lock, None
         return g
+
+    def pop_locks(self) -> dict[int, str]:
+        """Event kunci per pemain mode battle; diambil sekali."""
+        with self._lock:
+            d, self._pending_player_locks = self._pending_player_locks, {}
+        return d
 
     def mjpeg_frames(self):
         """Generator multipart MJPEG untuk browser.

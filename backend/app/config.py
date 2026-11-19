@@ -29,6 +29,11 @@ CORS_ORIGINS = [
     "http://127.0.0.1:8080",
 ]
 
+# `serve_frontend.py` otomatis pindah port bila 3000/8080 sedang dipakai. Tanpa
+# pola ini, frontend di port 8081 langsung diblokir CORS dan tampak "Backend
+# offline". Pola dibatasi ke loopback saja — tetap tidak ada origin luar.
+CORS_ORIGIN_REGEX = r"^http://(localhost|127\.0\.0\.1)(:\d+)?$"
+
 # --- Admin & auth ---------------------------------------------------------
 ADMIN_DEFAULT_USERNAME = os.getenv("SKOMDA_ADMIN_USER", "admin")
 ADMIN_DEFAULT_PASSWORD = os.getenv("SKOMDA_ADMIN_PASS", "skomda2026")

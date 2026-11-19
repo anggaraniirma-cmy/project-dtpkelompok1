@@ -16,8 +16,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import __version__, config, database
-from .game import engine
-from .routers import admin, auth, cv, game
+from .game import battle, engine
+from .routers import admin, auth, battle as battle_router, cv, game
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("skomda")
@@ -41,6 +41,9 @@ async def lifespan(app: FastAPI):
                 ev = engine.tick()
                 if ev:
                     log.info("game tick: %s", ev.get("event"))
+                bec = battle.battle_engine.tick()
+                if bec:
+                    log.info("battle tick: %s", bec.get("event"))
             except Exception:
                 log.exception("game tick gagal")
             try:
@@ -75,6 +78,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
+    allow_origin_regex=config.CORS_ORIGIN_REGEX,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
@@ -83,6 +87,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(game.router)
+app.include_router(battle_router.router)
 app.include_router(cv.router)
 
 
@@ -94,6 +99,7 @@ def health():
         "status": "ok",
         "versi": __version__,
         "kamera": bool(pipe and pipe.running),
+        "kamera_mode": cv.pipeline_mode(),
         "database": str(config.get_db_path().name),
         "jawaban_manual": config.ALLOW_MANUAL_ANSWER,
     }

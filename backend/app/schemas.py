@@ -42,6 +42,19 @@ class AnswerPayload(BaseModel):
     pilihan: Letter
 
 
+class BattleAnswerPayload(BaseModel):
+    """Jawaban satu pemain pada mode 2 Player Battle."""
+
+    pemain: int = Field(ge=1, le=2)
+    pilihan: Letter
+
+
+class BattleStartPayload(BaseModel):
+    jumlah_soal: int | None = Field(default=None, ge=1, le=20)
+    nama_pemain_1: str | None = Field(default=None, max_length=24)
+    nama_pemain_2: str | None = Field(default=None, max_length=24)
+
+
 class StartPayload(BaseModel):
     jumlah_soal: int | None = Field(default=None, ge=1, le=20)
 

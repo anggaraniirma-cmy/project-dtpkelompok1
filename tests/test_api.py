@@ -385,3 +385,138 @@ def test_feed_demo_dinonaktifkan(client):
     """Endpoint injeksi gesture tidak boleh terbuka untuk pengunjung."""
     r = client.post("/api/cv/feed?gesture=A")
     assert r.status_code == 403
+
+
+# ------------------------------------------------- 2 PLAYER BATTLE (API)
+def _jawaban_soal_aktif(client, mode: str = "battle") -> str:
+    """Ambil kunci jawaban dari DB untuk soal yang sedang aktif."""
+    from app import database
+    st = client.get("/api/battle/state" if mode == "battle" else "/api/game/state").json()
+    with database.get_conn() as conn:
+        row = conn.execute(
+            "SELECT jawaban FROM pertanyaan WHERE pertanyaan = ?",
+            (st["soal"]["pertanyaan"],),
+        ).fetchone()
+    return row["jawaban"]
+
+
+def test_battle_start_dan_state(client):
+    client.post("/api/battle/reset")
+    r = client.post("/api/battle/start", json={"jumlah_soal": 2,
+                                               "nama_pemain_1": "Rina",
+                                               "nama_pemain_2": "Budi"})
+    assert r.status_code == 200, r.text
+    st = r.json()
+    assert st["mode"] == "battle"
+    assert st["total_soal"] == 2
+    assert st["pemain"]["1"]["nama"] == "Rina"
+    assert st["pemain"]["2"]["nama"] == "Budi"
+    assert "jawaban" not in st["soal"], "kunci jawaban tidak boleh bocor"
+    assert st["pemain"]["1"]["skor"] == 0 and st["pemain"]["2"]["skor"] == 0
+
+
+def test_battle_dua_pemain_jawab_independen(client):
+    client.post("/api/battle/reset")
+    client.post("/api/battle/start", json={"jumlah_soal": 2})
+    benar = _jawaban_soal_aktif(client)
+    salah = "A" if benar != "A" else "B"
+
+    r1 = client.post("/api/battle/answer", json={"pemain": 1, "pilihan": benar})
+    r2 = client.post("/api/battle/answer", json={"pemain": 2, "pilihan": salah})
+    assert r1.status_code == 200 and r1.json()["benar"] is True
+    assert r2.status_code == 200 and r2.json()["benar"] is False
+    assert r1.json()["skor"] > 0
+    assert r2.json()["skor"] == 0, "skor P2 tidak boleh terpengaruh P1"
+
+    nx = client.post("/api/battle/next").json()
+    assert nx["lanjut"] == "berjalan", "kedua pemain sudah jawab -> boleh maju"
+    assert nx["state"]["nomor"] == 2
+    assert nx["state"]["pemain"]["1"]["skor"] == r1.json()["skor"], "skor tidak hilang"
+
+
+def test_battle_jawaban_ganda_per_pemain_ditolak(client):
+    client.post("/api/battle/reset")
+    client.post("/api/battle/start", json={"jumlah_soal": 2})
+    assert client.post("/api/battle/answer", json={"pemain": 1, "pilihan": "A"}).status_code == 200
+    dup = client.post("/api/battle/answer", json={"pemain": 1, "pilihan": "B"})
+    assert dup.status_code == 409
+    assert "sudah menjawab" in dup.json()["detail"].lower()
+    # P2 masih boleh menjawab soal yang sama
+    assert client.post("/api/battle/answer", json={"pemain": 2, "pilihan": "C"}).status_code == 200
+
+
+def test_battle_next_diabaikan_bila_satu_pemain_belum_jawab(client):
+    client.post("/api/battle/reset")
+    client.post("/api/battle/start", json={"jumlah_soal": 3})
+    client.post("/api/battle/answer", json={"pemain": 1, "pilihan": "A"})
+    nx = client.post("/api/battle/next").json()
+    assert nx["diabaikan"] is True
+    assert nx["menunggu"] == [2]
+    assert nx["state"]["nomor"] == 1
+    assert nx["state"]["pemain"]["1"]["sudah_menjawab"] is True
+
+
+def test_battle_pemain_invalid_ditolak(client):
+    client.post("/api/battle/reset")
+    client.post("/api/battle/start", json={"jumlah_soal": 1})
+    assert client.post("/api/battle/answer", json={"pemain": 3, "pilihan": "A"}).status_code == 422
+    assert client.post("/api/battle/answer", json={"pemain": 0, "pilihan": "A"}).status_code == 422
+    assert client.post("/api/battle/answer", json={"pemain": 1, "pilihan": "E"}).status_code == 422
+
+
+def test_battle_seri_dan_pemenang(client):
+    client.post("/api/battle/reset")
+    client.post("/api/battle/start", json={"jumlah_soal": 1})
+    benar = _jawaban_soal_aktif(client)
+    client.post("/api/battle/answer", json={"pemain": 1, "pilihan": benar})
+    client.post("/api/battle/answer", json={"pemain": 2, "pilihan": benar})
+    nx = client.post("/api/battle/next").json()
+    assert nx["lanjut"] == "selesai"
+    hasil = nx["hasil"]
+    assert hasil["mode"] == "battle"
+    assert hasil["seri"] is True
+    assert hasil["pemenang"] is None
+
+    # Pertandingan baru: P2 menang
+    client.post("/api/battle/reset")
+    client.post("/api/battle/start", json={"jumlah_soal": 1})
+    benar = _jawaban_soal_aktif(client)
+    salah = "A" if benar != "A" else "D"
+    client.post("/api/battle/answer", json={"pemain": 1, "pilihan": salah})
+    client.post("/api/battle/answer", json={"pemain": 2, "pilihan": benar})
+    hasil = client.post("/api/battle/next").json()["hasil"]
+    assert hasil["pemenang"] == 2
+    assert hasil["status"] == "pemain_2"
+
+
+def test_battle_timeout_menyimpan_skor_pemain_yang_sudah_jawab(client):
+    client.post("/api/battle/reset")
+    client.post("/api/battle/start", json={"jumlah_soal": 2})
+    benar = _jawaban_soal_aktif(client)
+    skor1 = client.post("/api/battle/answer",
+                        json={"pemain": 1, "pilihan": benar}).json()["skor"]
+    assert client.post("/api/battle/timeout").status_code == 200
+    st = client.get("/api/battle/state").json()
+    assert st["pemain"]["1"]["skor"] == skor1
+    assert st["pemain"]["2"]["skor"] == 0
+
+
+def test_battle_result_tanpa_sesi_404(client):
+    client.post("/api/battle/reset")
+    assert client.get("/api/battle/result").status_code == 404
+
+
+def test_photo_frame_tanpa_kamera_503(client):
+    """Photo Moment harus gagal dengan rapi bila kamera mati."""
+    client.post("/api/cv/stop")
+    r = client.get("/api/cv/photo-frame")
+    assert r.status_code == 503
+    assert "kamera" in r.json()["detail"].lower()
+
+
+def test_mode_kamera_battle_ditolak_tanpa_webcam(client):
+    """Tanpa webcam, /api/cv/start?mode=battle memberi 503 (bukan 500)."""
+    client.post("/api/cv/stop")
+    r = client.post("/api/cv/start?mode=battle")
+    assert r.status_code in (503, 200), r.text
+    client.post("/api/cv/stop")

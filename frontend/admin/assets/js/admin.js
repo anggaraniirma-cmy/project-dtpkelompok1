@@ -525,21 +525,46 @@ async function savePassword(e) {
 }
 
 /* ---------------------------------------------------------------- sessions */
+/** Ringkas satu baris sesi: mode single/battle + skor per pemain. */
+function ringkasSesi(s) {
+  const mode = (s.mode || 'single').toLowerCase();
+  if (mode === 'battle') {
+    const p1 = { nama: s.pemain_1 || 'Player 1', skor: s.skor_1 ?? 0 };
+    const p2 = { nama: s.pemain_2 || 'Player 2', skor: s.skor_2 ?? 0 };
+    const label = p1.skor === p2.skor
+      ? 'SERI'
+      : (p1.skor > p2.skor ? p1.nama : p2.nama) + ' menang';
+    return `
+      <div style="font-size:11px;line-height:1.5">
+        <div>${escapeHtml(p1.nama)}: <b>${p1.skor}</b></div>
+        <div>${escapeHtml(p2.nama)}: <b>${p2.skor}</b></div>
+        <div style="color:var(--slate);font-size:10px">${escapeHtml(label)}</div>
+      </div>`;
+  }
+  return `<b class="mono">${s.skor ?? 0}</b>
+    <div style="font-size:10px;color:var(--slate)">${s.benar ?? 0} benar</div>`;
+}
+
 async function loadSessions() {
   try {
     const rows = await api('/api/admin/sesi?limit=20');
     const tbody = $('#sessionRows');
     tbody.innerHTML = rows.length
-      ? rows.map((s) => `
+      ? rows.map((s) => {
+        const mode = (s.mode || 'single').toLowerCase();
+        return `
         <tr>
           <td class="mono" style="font-size:11px">${escapeHtml(s.id)}</td>
+          <td><span class="status-tag ${mode === 'battle' ? '' : 'is-off'}"
+                    style="${mode === 'battle' ? 'background:var(--red-tint);color:var(--red)' : ''}">
+            ${mode === 'battle' ? '2P' : '1P'}</span></td>
           <td class="mono">${s.total_soal}</td>
-          <td class="mono">${s.benar}</td>
-          <td class="mono"><b>${s.skor}</b></td>
+          <td>${ringkasSesi(s)}</td>
           <td><span class="status-tag ${s.status === 'selesai' ? '' : 'is-off'}">${escapeHtml(s.status)}</span></td>
           <td style="font-size:11px;color:var(--slate)">${escapeHtml(s.started_at || '—')}</td>
           <td style="font-size:11px;color:var(--slate)">${escapeHtml(s.finished_at || '—')}</td>
-        </tr>`).join('')
+        </tr>`;
+      }).join('')
       : '<tr><td colspan="7" class="table-empty">Belum ada sesi permainan.</td></tr>';
   } catch (err) {
     toast(err.message);

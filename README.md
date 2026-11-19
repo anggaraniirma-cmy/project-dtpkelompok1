@@ -41,13 +41,16 @@ backend/
     main.py              FastAPI, CORS, lifespan
     cv/
       camera.py          thread capture webcam
-      landmarks.py       MediaPipe HandLandmarker (21 landmark)
+      landmarks.py       MediaPipe HandLandmarker (21 landmark, 1-2 tangan)
       gesture.py         klasifikasi A/B/C/D per jari
+      players.py         pemisahan Player 1/2 berdasarkan zona kamera
       stabilizer.py      temporal smoothing, hold 1s, cooldown, re-arm
-      overlay.py         gambar landmark + HUD (OpenCV)
+      overlay.py         gambar landmark + HUD single & battle (OpenCV)
       pipeline.py        kamera → deteksi → klasifikasi → stabilisasi → JPEG
-    game/engine.py       state sesi, timer, skor, anti jawaban ganda
-    routers/             auth.py · admin.py · game.py · cv.py
+    game/
+      engine.py          sesi single player, timer, skor, anti jawaban ganda
+      battle.py          sesi 2 pemain: skor & jawaban terpisah per pemain
+    routers/             auth.py · admin.py · game.py · battle.py · cv.py
   data/quiz.db           database (dibuat otomatis)
   models/*.task          model MediaPipe
 frontend/
@@ -57,7 +60,7 @@ scripts/
   run_all.py             jalankan ketiga service
   serve_frontend.py      static server untuk kedua frontend
   download_model.py      unduh model MediaPipe bila belum ada
-tests/                   87 test otomatis
+tests/                    berisi test otomatis + skrip cek kamera
 ```
 
 ---
@@ -114,9 +117,12 @@ kedua frontend tidak menyimpan alamat backend secara hardcode.
 
 ## Cara bermain
 
-1. Buka http://localhost:8080, tekan **MULAI BERMAIN**.
-2. Berdiri di depan kamera, gunakan **tangan kanan**, **ibu jari terlipat**.
-3. Bentuk gerakan sesuai jawaban:
+Halaman awal menampilkan **dua kartu mode**. Pilih salah satu:
+
+### Single Player — `MULAI`
+
+1. Berdiri di depan kamera, gunakan **tangan kanan**, **ibu jari terlipat**.
+2. Bentuk gerakan sesuai jawaban:
 
    | Gesture | Jari terangkat |
    |---|---|
@@ -125,8 +131,42 @@ kedua frontend tidak menyimpan alamat backend secara hardcode.
    | **C** | telunjuk + tengah + manis |
    | **D** | telunjuk + tengah + manis + kelingking |
 
-4. Tahan ±1 detik sampai bilah progres penuh → jawaban terkunci.
-5. Lepas tangan sebelum menjawab soal berikutnya (mencegah jawaban ganda).
+3. Tahan ±1 detik sampai bilah progres penuh → jawaban terkunci.
+4. Lepas tangan sebelum menjawab soal berikutnya (mencegah jawaban ganda).
+
+### 2 Player Battle — `MULAI BATTLE`
+
+1. Dua pengunjung berdiri **berdampingan**: Player 1 di **zona kiri** kamera,
+   Player 2 di **zona kanan**. Keduanya memakai **tangan kanan**.
+2. Keduanya mendapat **pertanyaan yang sama** dan menjawab dengan gesture A/B/C/D.
+3. Setiap pemain punya stabilizer, progress tahan, cooldown, dan skor sendiri.
+   Jawaban yang sudah terkunci tidak bisa berubah dan tidak dihitung dua kali.
+4. Soal berganti setelah **keduanya** menjawab (atau waktu habis). Pemain yang
+   sudah menjawab tetap memegang statusnya sambil menunggu.
+5. Di akhir, skor dibandingkan: pemenang ditentukan dari skor; skor sama = **SERI**.
+
+Cara sistem menentukan pemain: **posisi tangan pada frame**, bukan urutan deteksi.
+MediaPipe bisa mengembalikan tangan dalam urutan apa pun; backend mengurutkan
+berdasarkan posisi horizontal telapak, lalu menetapkan yang paling kiri ke
+Player 1 dan yang paling kanan ke Player 2. Tangan kiri ditolak. Bila kedua
+tangan berada di zona yang salah (pengunjung berdempetan), permainan tetap
+jalan tetapi overlay dan panel menampilkan peringatan **"di luar zona"**.
+
+### Photo Moment
+
+Setelah permainan selesai (kedua mode), tombol **AMBIL FOTO?** membuka sesi foto:
+
+| Tombol | Fungsi |
+|---|---|
+| **AMBIL FOTO** | hitung mundur 3 detik, lalu mengambil satu frame |
+| **FOTO ULANG** | membuang hasil dan kembali ke pratinjau |
+| **SIMPAN FOTO** | mengunduh PNG ke perangkat pengunjung |
+| **SELESAI** | melepas kamera dan kembali ke beranda |
+
+Foto tidak pernah diambil otomatis, tidak disimpan sebelum tombol **SIMPAN FOTO**,
+dan tidak dikirim ke layanan mana pun — overlay digambar di `<canvas>` browser
+lalu diunduh sebagai `skomda-photo-<mode>-<timestamp>.png`. Nama file memakai
+timestamp sehingga tidak pernah menimpa foto sebelumnya.
 
 Tombol **"Kamera bermasalah? Jawab dengan klik"** adalah jalur cadangan darurat.
 Matikan dengan `SKOMDA_ALLOW_MANUAL_ANSWER=0` bila ingin jawaban murni gesture.
@@ -211,24 +251,6 @@ dibaca ulang saat kamera dinyalakan, jadi perubahan berlaku pada sesi berikutnya
 
 ---
 
-## Pengujian
-
-```bash
-.venv/Scripts/python.exe -m pytest -q            # 95 test, tanpa kamera
-.venv/Scripts/python.exe tests/manual_camera_check.py         # kamera nyata
-.venv/Scripts/python.exe tests/manual_camera_check.py --gui   # dengan jendela
-```
-
-Cakupan otomatis: klasifikasi A–D (termasuk skala 0,7–1,5× dan rotasi ±25°),
-penolakan gesture tak valid, stabilisasi/cooldown/jitter, autentikasi & otorisasi
-admin, CRUD soal, validasi input, alur permainan penuh, jawaban ganda, timeout,
-batas waktu server-side & pembatalan sesi telantar, pengaturan, ganti password.
-
-`manual_camera_check.py` melaporkan apa adanya: bila tidak ada tangan di depan
-kamera, statusnya "TIDAK ADA TANGAN TERDETEKSI" — bukan klaim berhasil.
-
----
-
 ## Konfigurasi (environment)
 
 | Variabel | Default | Keterangan |
@@ -244,6 +266,54 @@ kamera, statusnya "TIDAK ADA TANGAN TERDETEKSI" — bukan klaim berhasil.
 | `SKOMDA_ABANDON_AFTER` | `120` | sesi ditutup bila ditinggal selama ini (detik) |
 
 > **Sebelum pameran:** ganti password default lewat menu Pengaturan.
+
+---
+
+## Pengujian
+
+```bash
+.venv\Scripts\python.exe -m pytest -q            # harus 144 passed
+.venv\Scripts\python.exe tests\manual_camera_check.py
+.venv\Scripts\python.exe tests\manual_camera_check.py --gui
+
+# mode 2 pemain (butuh dua orang di depan kamera)
+.venv\Scripts\python.exe tests\manual_battle_check.py
+.venv\Scripts\python.exe tests\manual_battle_check.py --seconds 60
+
+# uji integrasi terhadap backend yang sedang berjalan
+.venv\Scripts\python.exe tests\live_check_battle.py http://127.0.0.1:8000
+```
+
+`manual_battle_check.py` melaporkan **persentase frame** di mana dua tangan
+terdeteksi bersamaan dan berapa kali tiap pemain terbaca di luar zonanya. Bila
+angkanya 0%, skrip menuliskan itu dan menyebutkan penyebab yang perlu diperiksa
+(pencahayaan, posisi berdiri, kamera dipakai aplikasi lain) — bukan mengklaim
+berhasil.
+
+Uji otomatis berjalan **tanpa kamera**; pipeline battle diuji dengan kamera dan
+detektor palsu sehingga pemisahan pemain, stabilizer independen, dan antrean
+kunci per pemain benar-benar dieksekusi.
+
+---
+
+## Mode 2 Player Battle — catatan teknis
+
+| Bagian | Berkas | Perilaku |
+|---|---|---|
+| Deteksi dua tangan | `cv/landmarks.py` (`detect_many`) | `num_hands=2` hanya saat mode battle |
+| Pemisahan pemain | `cv/players.py` | urut posisi horizontal; kiri = P1, kanan = P2 |
+| Stabilizer per pemain | `cv/pipeline.py` (`stabilizers`) | dua instance independen, latch & cooldown sendiri |
+| Antrean kunci | `cv/pipeline.py` (`pop_locks`) | `{1: "A", 2: "D"}`, diambil sekali |
+| Mesin permainan | `game/battle.py` | skor/jawaban/riwayat per pemain, anti duplikat per pemain |
+| API | `routers/battle.py` | `/api/battle/{start,state,answer,next,timeout,result,reset}` |
+| WebSocket | `routers/cv.py` (`/ws/battle`) | status kamera dua pemain + jawaban terkunci |
+| Skema DB | `database.py` (`_migrasi_kolom`) | kolom `mode`, `pemain_1/2`, `skor_1/2`, `benar_1/2`, `pemain` |
+
+Rumus poin dipakai bersama kedua mode (`game/engine.py: hitung_poin`), jadi skor
+single player dan battle selalu sebanding: **10 poin + bonus kecepatan maks 5**.
+
+Migrasi database berjalan otomatis dan idempoten saat startup — database lama
+tetap utuh, tidak perlu menghapus `quiz.db`.
 
 ---
 

@@ -455,6 +455,11 @@ main { flex: 1; }
 .option.is-clickable { cursor: pointer; }
 .option.is-clickable:hover { border-color: var(--red); transform: translateX(2px); }
 
+/* Penanda opsi pilihan tiap pemain (mode battle): garis sisi berwarna. */
+.option.is-p1 { box-shadow: inset 4px 0 0 var(--red); }
+.option.is-p2 { box-shadow: inset 4px 0 0 #2f7fd1; }
+.option.is-p1.is-p2 { box-shadow: inset 4px 0 0 var(--red), inset 8px 0 0 #2f7fd1; }
+
 .q-foot {
   display: flex; justify-content: space-between; align-items: center;
   margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line);

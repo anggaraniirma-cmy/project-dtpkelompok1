@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/main.css" />
+<link rel="stylesheet" href="assets/css/multiplayer.css" />
 </head>
 <body>
 
@@ -57,13 +58,51 @@
           <li><b>03</b> Tahan 1 detik — jawaban terkunci</li>
         </ul>
 
-        <div class="hero-actions">
-          <button class="btn btn-primary btn-lg" id="btnStart">
-            <span>MULAI BERMAIN</span>
-            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
-          </button>
-          <a class="btn btn-ghost btn-lg" href="#panduan">Lihat panduan gesture</a>
+        <div class="mode-picker">
+          <article class="mode-card">
+            <div class="mode-card-head">
+              <span class="mode-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-3.6 0-7 1.9-7 4.2V20h14v-1.8c0-2.3-3.4-4.2-7-4.2z"/></svg>
+              </span>
+              <span class="mode-tag">MODE 01</span>
+            </div>
+            <h3>SINGLE PLAYER</h3>
+            <p>Satu pengunjung, satu kamera. Jawab semua soal dengan gerakan jari dan kejar skor tertinggi.</p>
+            <ul class="mode-list">
+              <li>Gesture A · B · C · D</li>
+              <li>Tahan 1 detik untuk mengunci</li>
+              <li>Predikat &amp; riwayat jawaban</li>
+            </ul>
+            <button class="btn btn-primary btn-lg mode-btn" id="btnStart">
+              <span>MULAI</span>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+            </button>
+          </article>
+
+          <article class="mode-card mode-card--battle">
+            <div class="mode-card-head">
+              <span class="mode-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M8 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zm8 0a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2 20v-1.6C2 16 5 14 8 14s6 2 6 4.4V20H2zm13.2 0v-1.6c0-1.1-.5-2.1-1.3-2.9 1-.4 2-.6 3.1-.6 3 0 6 2 6 4.4V20h-7.8z"/></svg>
+              </span>
+              <span class="mode-tag">MODE 02</span>
+            </div>
+            <h3>2 PLAYER BATTLE</h3>
+            <p>Dua pengunjung berdampingan di depan satu kamera. Pertanyaan sama, skor terpisah — siapa paling cepat dan tepat?</p>
+            <ul class="mode-list">
+              <li>Zona kiri Player 1 · kanan Player 2</li>
+              <li>Keduanya memakai tangan kanan</li>
+              <li>Pemenang &amp; status seri</li>
+            </ul>
+            <button class="btn btn-primary btn-lg mode-btn" id="btnStartBattle">
+              <span>MULAI BATTLE</span>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+            </button>
+          </article>
         </div>
+
+        <p class="mode-hint">
+          <a class="link-inline" href="#panduan">Lihat panduan gesture A/B/C/D ↓</a>
+        </p>
 
         <p class="hint-line">
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-6h2zm0-8h-2V7h2z"/></svg>
@@ -283,10 +322,221 @@
         <div class="res-list" id="resList"></div>
 
         <div class="res-actions">
-          <button class="btn btn-primary btn-lg" id="btnReplay">MAIN LAGI</button>
+          <button class="btn btn-primary btn-lg" id="btnPhotoSingle">
+            <svg class="cam-ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M9 3l-1.5 2H5a2 2 0 00-2 2v11a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2h-2.5L15 3H9zm3 5a5 5 0 110 10 5 5 0 010-10z"/></svg>
+            AMBIL FOTO?
+          </button>
+          <button class="btn btn-ghost btn-lg" id="btnReplay">MAIN LAGI</button>
           <button class="btn btn-ghost btn-lg" id="btnHome">Kembali ke Beranda</button>
         </div>
         <p class="res-foot">Terima kasih sudah mencoba teknologi Computer Vision SMK Telkom Sidoarjo.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BATTLE GAME ============ -->
+  <section id="screen-battle" class="screen">
+    <div class="wrap game-shell">
+      <div class="game-bar">
+        <div class="progress-block">
+          <div class="progress-top">
+            <span class="label">PROGRES BATTLE</span>
+            <span id="bProgressText" class="mono">1 / 5</span>
+          </div>
+          <div class="progress-track"><span id="bProgressBar"></span></div>
+        </div>
+        <div class="p-scoreboard" id="bScoreboard">
+          <div class="p-chip" data-player="1" id="bChip1">
+            <span class="p-badge">P1</span>
+            <div>
+              <span class="p-name" id="bName1">PLAYER 1</span>
+              <div class="p-score" id="bScore1">0</div>
+              <span class="p-state" id="bState1">Belum jawab</span>
+            </div>
+          </div>
+          <div class="p-chip" data-player="2" id="bChip2">
+            <span class="p-badge">P2</span>
+            <div>
+              <span class="p-name" id="bName2">PLAYER 2</span>
+              <div class="p-score" id="bScore2">0</div>
+              <span class="p-state" id="bState2">Belum jawab</span>
+            </div>
+          </div>
+          <div class="stat stat-timer">
+            <div class="timer-text">
+              <span class="label">WAKTU</span>
+              <strong id="bTimerValue" class="mono">30</strong>
+            </div>
+            <div class="timer-ring" aria-hidden="true">
+              <svg viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15.5"/><circle id="bRingFg" class="ring-fg" cx="18" cy="18" r="15.5"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="game-grid">
+        <div class="cam-col">
+          <div class="cam-frame">
+            <div class="cam-topbar">
+              <span class="cam-label"><i class="dot dot-red"></i> KAMERA · 2 PLAYER BATTLE</span>
+              <span class="cam-fps mono" id="bFpsLabel">—</span>
+            </div>
+            <div class="cam-stage">
+              <img id="bCamStream" alt="Tampilan kamera dua pemain" />
+              <div class="cam-offline" id="bCamOffline">
+                <div class="spinner"></div>
+                <p id="bCamOfflineText">Menyiapkan kamera dua pemain…</p>
+              </div>
+              <div class="cam-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            </div>
+            <div class="cam-foot">
+              <span class="cam-note" id="bCamNote" style="margin:0">
+                Player 1 di zona kiri, Player 2 di zona kanan. Keduanya tangan kanan.
+              </span>
+            </div>
+          </div>
+
+          <div class="battle-panels">
+            <div class="battle-panel" data-player="1" id="bPanel1">
+              <div class="bp-head">
+                <span class="bp-name" id="bPanelName1">PLAYER 1 · KIRI</span>
+                <span class="bp-gesture" id="bGesture1">—</span>
+              </div>
+              <div class="bp-bar"><span id="bHold1"></span></div>
+              <div class="bp-note" id="bNote1">Menunggu tangan…</div>
+              <div class="bp-fb" id="bFb1"></div>
+            </div>
+            <div class="battle-panel" data-player="2" id="bPanel2">
+              <div class="bp-head">
+                <span class="bp-name" id="bPanelName2">PLAYER 2 · KANAN</span>
+                <span class="bp-gesture" id="bGesture2">—</span>
+              </div>
+              <div class="bp-bar"><span id="bHold2"></span></div>
+              <div class="bp-note" id="bNote2">Menunggu tangan…</div>
+              <div class="bp-fb" id="bFb2"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="quiz-col">
+          <div class="question-card">
+            <div class="q-head">
+              <span class="chip" id="bKategori">KATEGORI</span>
+              <span class="q-index mono" id="bIndex">SOAL 01</span>
+            </div>
+            <h2 id="bText">Menyiapkan pertanyaan…</h2>
+
+            <div class="options" id="bOptions">
+              <button class="option" data-choice="A">
+                <span class="opt-letter">A</span><span class="opt-text">—</span><span class="opt-key">1 jari</span>
+              </button>
+              <button class="option" data-choice="B">
+                <span class="opt-letter">B</span><span class="opt-text">—</span><span class="opt-key">2 jari</span>
+              </button>
+              <button class="option" data-choice="C">
+                <span class="opt-letter">C</span><span class="opt-text">—</span><span class="opt-key">3 jari</span>
+              </button>
+              <button class="option" data-choice="D">
+                <span class="opt-letter">D</span><span class="opt-text">—</span><span class="opt-key">4 jari</span>
+              </button>
+            </div>
+
+            <div class="manual-wrap" id="bManualWrap">
+              <div class="manual-grid">
+                <div class="manual-col">
+                  <span class="label">PLAYER 1</span>
+                  <div class="mini-opts" data-player="1">
+                    <button class="mini-opt" data-choice="A">A</button>
+                    <button class="mini-opt" data-choice="B">B</button>
+                    <button class="mini-opt" data-choice="C">C</button>
+                    <button class="mini-opt" data-choice="D">D</button>
+                  </div>
+                </div>
+                <div class="manual-col">
+                  <span class="label">PLAYER 2</span>
+                  <div class="mini-opts" data-player="2">
+                    <button class="mini-opt" data-choice="A">A</button>
+                    <button class="mini-opt" data-choice="B">B</button>
+                    <button class="mini-opt" data-choice="C">C</button>
+                    <button class="mini-opt" data-choice="D">D</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="q-foot">
+              <button class="link-btn" id="bBtnManual">Kamera bermasalah? Jawab dengan klik</button>
+              <button class="link-btn danger" id="bBtnQuit">Keluar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BATTLE RESULT ============ -->
+  <section id="screen-battle-result" class="screen">
+    <div class="wrap result-wrap">
+      <div class="result-card battle-result">
+        <span class="eyebrow"><i class="tick"></i> PERTANDINGAN SELESAI</span>
+
+        <div class="duel">
+          <div class="duel-card" data-player="1" id="duel1">
+            <span class="crown" id="crown1" style="display:none">PEMENANG</span>
+            <span class="duel-name" id="duelName1">PLAYER 1</span>
+            <div class="duel-score" id="duelScore1">0</div>
+            <span class="duel-sub" id="duelSub1">0 benar</span>
+          </div>
+          <div class="duel-vs">VS</div>
+          <div class="duel-card" data-player="2" id="duel2">
+            <span class="crown" id="crown2" style="display:none">PEMENANG</span>
+            <span class="duel-name" id="duelName2">PLAYER 2</span>
+            <div class="duel-score" id="duelScore2">0</div>
+            <span class="duel-sub" id="duelSub2">0 benar</span>
+          </div>
+        </div>
+
+        <div class="duel-status" id="bBattleStatus">Pertandingan selesai</div>
+
+        <div class="res-actions" style="margin-top:20px">
+          <button class="btn btn-primary btn-lg" id="btnPhotoBattle">
+            <svg class="cam-ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M9 3l-1.5 2H5a2 2 0 00-2 2v11a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2h-2.5L15 3H9zm3 5a5 5 0 110 10 5 5 0 010-10z"/></svg>
+            AMBIL FOTO?
+          </button>
+          <button class="btn btn-ghost btn-lg" id="btnBattleReplay">TANDING LAGI</button>
+          <button class="btn btn-ghost btn-lg" id="btnBattleHome">Kembali ke Beranda</button>
+        </div>
+        <p class="res-foot">Terima kasih sudah mencoba teknologi Computer Vision SMK Telkom Sidoarjo.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PHOTO MOMENT ============ -->
+  <section id="screen-photo" class="screen">
+    <div class="wrap">
+      <div class="photo-stage">
+        <div class="photo-frame">
+          <canvas id="photoCanvas" width="1200" height="900"></canvas>
+          <div class="photo-placeholder" id="photoPlaceholder">
+            <div class="spinner"></div>
+            <p id="photoPlaceholderText">Menyiapkan kamera…</p>
+          </div>
+          <div class="photo-countdown" id="photoCountdown">3</div>
+        </div>
+
+        <p class="photo-tip" id="photoTip">
+          Hadapkan wajah ke kamera. Foto hanya diambil saat kamu menekan AMBIL FOTO.
+        </p>
+
+        <div class="res-actions">
+          <button class="btn btn-primary btn-lg" id="btnSnap">AMBIL FOTO</button>
+          <button class="btn btn-ghost btn-lg" id="btnRetake" disabled>FOTO ULANG</button>
+          <button class="btn btn-ghost btn-lg" id="btnSavePhoto" disabled>SIMPAN FOTO</button>
+          <button class="btn btn-ghost btn-lg" id="btnDonePhoto">SELESAI</button>
+        </div>
+        <p class="res-foot" style="text-align:center">
+          Foto disimpan langsung di perangkat ini. Tidak dikirim ke layanan mana pun.
+        </p>
       </div>
     </div>
   </section>
@@ -317,5 +567,7 @@
      memakai http://localhost:8000 sebagai default. -->
 <script src="config.js"></script>
 <script src="assets/js/app.js"></script>
+<script src="assets/js/battle.js"></script>
+<script src="assets/js/photo.js"></script>
 </body>
 </html>
