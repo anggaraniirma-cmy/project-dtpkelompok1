@@ -97,7 +97,19 @@
         return null;
       });
 
-      const gs = await api('/api/battle/start', { method: 'POST', body: '{}' });
+      const gs = await api('/api/battle/start', {
+        method: 'POST',
+        body: JSON.stringify(
+          window.skomdaJumlahSoal
+            ? { jumlah_soal: window.skomdaJumlahSoal.jumlah('battle') }
+            : {},
+        ),
+      });
+
+      const pm = gs.permintaan_soal;
+      if (pm && pm.kurang > 0) {
+        toast(`Bank soal hanya ${pm.dipakai} soal — pertandingan memakai ${pm.dipakai} soal.`, true);
+      }
       B.game = gs;
       B.active = true;
       B.answered = { 1: false, 2: false };

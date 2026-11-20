@@ -21,6 +21,13 @@ from app.main import app  # noqa: E402
 
 ADMIN = {"username": "admin", "password": "skomda2026"}
 
+# PNG 1x1 piksel sah (magic bytes benar) untuk menguji jalur berkas media.
+PNG_CONTOH = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
+    "890000000a49444154789c6360000002000100ffff03000006000557bfabd400"
+    "00000049454e44ae426082"
+)
+
 
 @pytest.fixture(scope="session")
 def client():
@@ -42,13 +49,21 @@ def auth(token):
 
 # --------------------------------------------------------------- media publik
 def test_media_fotocontoh_publik_dan_png(client):
-    """Foto hero disajikan dari backend/data/foto tanpa perlu login."""
+    """Foto hero disajikan dari backend/data/foto tanpa perlu login.
+
+    Berkas dibuat sendiri di folder foto sementara: conftest mengarahkan
+    SKOMDA_FOTO_DIR ke folder sementara agar test tidak menyentuh data
+    pengunjung asli.
+    """
+    from app import config
+
+    config.FOTO_DIR.mkdir(parents=True, exist_ok=True)
+    (config.FOTO_DIR / "fotocontoh.png").write_bytes(PNG_CONTOH)
+
     r = client.get("/api/media/fotocontoh.png")
-    if r.status_code == 404:
-        pytest.skip("backend/data/foto/fotocontoh.png tidak ada di mesin ini")
     assert r.status_code == 200
     assert r.headers["content-type"] == "image/png"
-    assert len(r.content) > 10_000
+    assert len(r.content) == len(PNG_CONTOH)
 
 
 def test_media_tidak_bisa_dipakai_membaca_foto_galeri(client):

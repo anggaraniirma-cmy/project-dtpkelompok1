@@ -7,7 +7,7 @@ diverifikasi langsung.
 
 Versi kode saat dokumen ini ditulis: `app.__version__ = "1.0.0"`,
 Python 3.11.4, `mediapipe==1.2.2`, `opencv-python==5.0.0.93`,
-`fastapi==0.162.4`, 204 test lulus (lihat §K).
+`fastapi==0.162.4`, 224 test lulus (lihat §K).
 
 Penanda yang dipakai di seluruh dokumen:
 
@@ -62,7 +62,7 @@ sisi pengunjung — cukup berdiri di depan kamera.
 - Menyediakan panel panitia untuk mengelola soal dan melihat statistik
   pemakaian selama pameran.
 - Menjadi basis belajar: kode dipisah menjadi modul yang bisa diuji tanpa
-  kamera (204 test).
+  kamera (224 test).
 
 ---
 
@@ -105,6 +105,13 @@ PostgreSQL/MySQL, tidak ada Redis, tidak ada cloud storage, tidak ada layanan
 eksternal untuk gambar/video. Frontend dilayani `http.server` dari Python
 standar (`scripts/serve_frontend.py`).
 
+**Satu-satunya ketergantungan online** adalah font tampilan dari Google Fonts
+(`<link href="https://fonts.googleapis.com/...">` di kedua `index.html`).
+Ada fallback `system-ui, "Segoe UI", sans-serif`, jadi bila internet mati
+permainan tetap berjalan penuh — hanya jenis hurufnya berubah. Bila pameran
+ingin 100% offline, unduh font dan ganti `<link>` itu dengan `@font-face`
+lokal.
+
 ---
 
 ## C. Arsitektur Sistem
@@ -138,7 +145,7 @@ flowchart TB
         R_WS["WS /api/cv/ws<br/>WS /api/cv/ws/battle"]
         R_ADMIN["/api/admin/*<br/>(Bearer JWT)"]
         R_AUTH["/api/auth/login"]
-        R_GAL["/api/galeri/foto<br/>(publik, tulis saja)"]
+        R_GAL["/api/galeri/foto<br/>(publik, tulis saja)<br/>/api/galeri/publik<br/>(baca: foto carousel)"]
         R_MEDIA["/api/media/fotocontoh.png<br/>(satu berkas publik)"]
     end
 
@@ -349,7 +356,7 @@ Setiap penolakan **dicatat sebagai alasan** (`terlalu_kecil`, `luar_area`,
   memakai geometri. Pengembangan berikutnya: person detection
   (mis. MediaPipe Pose / YOLO) atau depth camera.
 - **Akurasi belum diukur dengan metrik formal.** Belum ada dataset
-  berlabel/tabel akurasi per kondisi cahaya. Yang ada: 204 test sintetis +
+  berlabel/tabel akurasi per kondisi cahaya. Yang ada: 224 test sintetis +
   skrip kalibrasi manual (`tests/record_gesture_samples.py`,
   `scripts/analyze_calibration.py`) dan pemeriksaan kamera manual
   (`tests/manual_camera_check.py`, `manual_battle_check.py`,
@@ -379,6 +386,16 @@ habis; pemain yang sudah menjawab tetap mempertahankan jawabannya.
 Tabel `pertanyaan` (lihat §F). Field: teks, empat pilihan, kunci jawaban,
 kategori, durasi per soal, status aktif. Dikelola dari Admin Panel
 (CRUD). Jawaban tidak pernah dikirim ke browser sebelum soal selesai.
+
+**Jumlah soal dipilih pengunjung** di kartu mode: **5 / 7 / 10**
+(`config.JUMLAH_SOAL_PILIHAN`, satu sumber kebenaran yang diumumkan lewat
+`GET /api/info/jumlah-soal`). Pilihan dikirim sebagai `jumlah_soal` ke
+`POST /api/game/start` dan `POST /api/battle/start`; backend tetap menerima
+1–20 agar panel admin dan pengujian bebas memakai nilai lain.
+Bila bank soal aktif lebih sedikit dari pilihan (mis. minta 10, aktif 8),
+permainan **tetap berjalan** dengan soal yang ada dan respons start memuat
+`permintaan_soal: {diminta, dipakai, kurang}` — UI memberi tahu pengunjung
+alih-alih menampilkan error.
 
 ### Timer — **ADA (server-side)**
 - Waktu mulai soal diambil `time.monotonic()` di server.
@@ -468,8 +485,15 @@ Default/batas (ditegakkan di backend): `jumlah_soal` 5 (1–20),
 
 **6. `galeri_foto`** — metadata foto yang dikirim pengunjung
 `id` PK · `nama_file` TEXT UNIQUE · `sesi_id` · `mode` · `pemain_1` ·
-`pemain_2` · `skor_1` · `skor_2` · `pemenang` · `ukuran` · `created_at`
+`pemain_2` · `skor_1` · `skor_2` · `pemenang` · `ukuran` · `created_at` ·
+`publik` INTEGER NOT NULL DEFAULT 0 · `publik_at` TEXT
 Indeks: `idx_galeri_created(created_at DESC)`
+
+`publik` adalah **status persetujuan tayang** di carousel hero halaman
+pengunjung. Default `0` berarti foto baru **tidak** otomatis dipajang: panitia
+harus menyetujui satu per satu lewat `PUT /api/admin/galeri/{id}/publik`.
+`publik_at` mencatat kapan persetujuan diberikan. Kolom ini ditambahkan lewat
+migrasi idempoten, jadi database lama ikut terbarui tanpa kehilangan data.
 
 ### Relasi
 
@@ -505,6 +529,23 @@ di-`.gitignore`), metadata di `galeri_foto`.
   `/api/media/fotocontoh.png` (satu nama dipatok, tidak bisa dipakai
   membaca foto galeri) dan `/assets/foto/…` dari static server.
 
+### Carousel dokumentasi di hero (foto promosi)
+
+Hero halaman pengunjung menampilkan carousel maksimum **5 foto** dari galeri.
+Daftar tidak di-hardcode dan **tidak** memakai endpoint admin:
+
+| Endpoint | Akses | Isi |
+|---|---|---|
+| `GET /api/galeri/publik` | publik, tanpa token | maks 5 foto `publik = 1`, terbaru dulu, field aman saja (tanpa `sesi_id`, nama pemain, skor) |
+| `GET /api/galeri/publik/{nama_file}?thumb=1` | publik, tanpa token | satu berkas, hanya bila `publik = 1` |
+| `PUT /api/admin/galeri/{id}/publik` | **wajib Bearer** | setujui / tarik persetujuan tayang |
+
+Batasannya: berkas yang sudah hilang dari disk tidak dikembalikan (carousel
+tidak menampilkan gambar rusak); nama berkas divalidasi regex + `Path.relative_to`
+(anti path traversal); tidak ada token admin di halaman pengunjung; bila belum
+ada foto disetujui, tampil fallback statis. Panitia melihat badge **PUBLIK**
+pada kartu galeri untuk foto yang sedang tayang.
+
 ---
 
 ## G. Admin Panel
@@ -526,6 +567,7 @@ dilayani `localhost:3000`. Semua endpoint di bawah `/api/admin/*` wajib
 | Pengaturan permainan | `GET/PUT /api/admin/pengaturan` | batas min/max dikirim API agar form tidak menduplikasi angka |
 | Ganti password | `POST /api/admin/password` | wajib password lama, minimal 8 karakter, token lama tidak dipaksa logout |
 | Galeri foto | `GET /api/admin/galeri`, `GET /api/admin/galeri/{nama_file}?thumb=1`, `DELETE /api/admin/galeri/{id}` | pratinjau `<img>` memakai `?token=` karena tag `<img>` tidak bisa mengirim header |
+| Persetujuan tayang carousel | `PUT /api/admin/galeri/{id}/publik` | tombol **Tampilkan di hero** / **Sembunyikan dari hero**; foto publik diberi badge PUBLIK |
 
 ### Autentikasi (aktual)
 
@@ -553,7 +595,8 @@ satu akun (**ADA, TERBATAS**: satu tabel admin, tanpa UI tambah admin).
 
 ```mermaid
 flowchart TD
-    A["Pengunjung membuka<br/>http://localhost:8080"] --> B["Landing: hero + foto pameran<br/>hook 'Mereka sudah nyoba, kamu kapan?'"]
+    A["Pengunjung membuka<br/>http://localhost:8080"] --> B["Landing: hero + carousel foto<br/>hook 'Mereka sudah nyoba, kamu kapan?'"]
+    B --> B2["GET /api/galeri/publik<br/>maks 5 foto disetujui panitia<br/>(fallback bila belum ada)"]
     B --> C{"Pilih mode"}
     C -->|"MULAI BERMAIN"| D["POST /api/cv/start?mode=single<br/>POST /api/game/start"]
     C -->|"MULAI BATTLE"| E["POST /api/cv/start?mode=battle<br/>POST /api/battle/start"]
@@ -585,6 +628,8 @@ Catatan alur:
 - Kamera **tidak** menyala saat backend start. Baru menyala ketika
   pengunjung menekan MULAI (atau saat Photo Moment dibuka).
 - Sound effect baru aktif setelah klik MULAI (tidak ada autoplay).
+- Carousel di landing hanya menampilkan foto yang **sudah disetujui panitia**
+  (lihat §F). Foto baru dari pengunjung tidak otomatis tayang.
 - Bila kamera gagal, permainan tetap bisa dicoba lewat jalur manual
   (`Kamera bermasalah? Jawab dengan klik`) — dapat dimatikan panitia dengan
   `SKOMDA_ALLOW_MANUAL_ANSWER=0` untuk pameran murni gesture.
@@ -612,7 +657,7 @@ kelompok1dtp/
 │   │   ├── database.py           # skema SQLite, migrasi idempoten, seed, pengaturan
 │   │   ├── security.py           # bcrypt, JWT, require_admin(_media), throttle login
 │   │   ├── schemas.py            # model Pydantic request
-│   │   ├── galeri.py             # simpan/daftar/ambil/hapus foto + thumbnail + prune
+│   │   ├── galeri.py             # simpan/daftar/ambil/hapus foto + thumbnail + prune + daftar_publik
 │   │   ├── cv/                   # ---- computer vision ----
 │   │   │   ├── camera.py         # capture thread, frame terbaru menang, release
 │   │   │   ├── landmarks.py      # MediaPipe HandLandmarker (21 titik) + koreksi handedness
@@ -649,6 +694,8 @@ kelompok1dtp/
 │   │       ├── js/app.js         # single player: start, timer, WS, feedback, manual
 │   │       ├── js/battle.js      # 2 pemain: skor, panel, badge status, hasil
 │   │       ├── js/photo.js       # Photo Moment: kanvas, unduh, kirim galeri
+│   │       ├── js/carousel.js    # carousel hero: fetch /api/galeri/publik, autoplay, pause
+│   │       ├── js/jumlah-soal.js # pemilih 5/7/10 soal (single & battle), persist localStorage
 │   │       ├── js/sfx.js         # audio lokal: unlock, mute, volume, anti-tumpuk
 │   │       ├── audio/*.wav       # 12 sound effect (dihasilkan generate_sfx.py)
 │   │       └── img/logo-sekolah.png
@@ -665,6 +712,8 @@ kelompok1dtp/
 └── tests/
     ├── conftest.py / synthetic_hand.py   # generator 21 landmark sintetis
     ├── test_api.py                # endpoint publik & admin
+    ├── test_carousel_publik.py    # persetujuan foto & batas endpoint carousel
+    ├── test_jumlah_soal.py        # pilihan 5/7/10 & bank soal kurang
     ├── test_battle.py             # engine battle + pemisahan zona
     ├── test_pipeline_battle.py    # pipeline battle dengan kamera & detector palsu
     ├── test_hand_selection.py     # ROI, ukuran, tracker, identitas pemain

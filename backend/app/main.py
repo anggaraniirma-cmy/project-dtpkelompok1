@@ -120,6 +120,24 @@ def info():
             "C": "Telunjuk + tengah + manis terangkat",
             "D": "Telunjuk + tengah + manis + kelingking terangkat",
         },
+        # Sumber kebenaran pilihan jumlah soal untuk halaman pengunjung.
+        # `tersedia` = berapa soal aktif di bank soal, supaya UI bisa
+        # memberi tahu bila "10 soal" belum bisa dipenuhi.
+        "jumlah_soal": {
+            "pilihan": list(config.JUMLAH_SOAL_PILIHAN),
+            "default": int(database.get_pengaturan()["jumlah_soal"]),
+            "tersedia": database.jumlah_soal_aktif(),
+        },
+    }
+
+
+@app.get("/api/info/jumlah-soal")
+def info_jumlah_soal():
+    """Ringkas saja — dipakai tombol 5/7/10 tanpa memuat data lain."""
+    return {
+        "pilihan": list(config.JUMLAH_SOAL_PILIHAN),
+        "default": int(database.get_pengaturan()["jumlah_soal"]),
+        "tersedia": database.jumlah_soal_aktif(),
     }
 
 

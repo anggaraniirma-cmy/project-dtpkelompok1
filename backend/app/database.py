@@ -84,6 +84,11 @@ CREATE TABLE IF NOT EXISTS pengaturan (
 -- Galeri dokumentasi: foto hasil Photo Moment yang DIKIRIM pengunjung secara
 -- sadar (tombol "Kirim ke Galeri Panitia"). File biner disimpan di folder
 -- backend/data/foto/, tabel ini hanya metadata + nama file.
+--
+-- `publik` = status PERSETUJUAN TAMPIL di carousel hero halaman pengunjung.
+-- Default 0: foto baru TIDAK otomatis dipajang ke publik. Panitia harus
+-- menyetujui satu per satu lewat panel admin, sehingga tidak ada foto
+-- pengunjung yang tayang tanpa izin.
 CREATE TABLE IF NOT EXISTS galeri_foto (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     nama_file   TEXT NOT NULL UNIQUE,
@@ -95,7 +100,9 @@ CREATE TABLE IF NOT EXISTS galeri_foto (
     skor_2      INTEGER,
     pemenang    TEXT,
     ukuran      INTEGER NOT NULL DEFAULT 0,
-    created_at  TEXT NOT NULL
+    created_at  TEXT NOT NULL,
+    publik      INTEGER NOT NULL DEFAULT 0,
+    publik_at   TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_galeri_created ON galeri_foto(created_at DESC);
@@ -176,6 +183,12 @@ def _migrasi_kolom(conn: sqlite3.Connection) -> None:
         "jawaban_permainan": [
             ("pemain", "INTEGER"),
         ],
+        # Kolom persetujuan publikasi carousel hero. Database yang dibuat
+        # sebelum fitur ini tidak punya kolomnya, jadi ditambahkan di sini.
+        "galeri_foto": [
+            ("publik", "INTEGER NOT NULL DEFAULT 0"),
+            ("publik_at", "TEXT"),
+        ],
     }
     for tabel, kolom in tambahan.items():
         ada = {r["name"] for r in conn.execute(f"PRAGMA table_info({tabel})").fetchall()}
@@ -214,6 +227,22 @@ def init_db() -> None:
                        VALUES (?,?,?,?,?,?,?,?,1,?,?)""",
                     (*q, ts, ts),
                 )
+
+
+def jumlah_soal_aktif() -> int:
+    """Berapa soal aktif yang tersedia di bank soal.
+
+    Dipakai UI untuk memberi tahu pengunjung bila memilih 7/10 soal padahal
+    soal aktif belum cukup — permainan tetap berjalan dengan soal yang ada,
+    tanpa error.
+    """
+    try:
+        with get_conn() as conn:
+            return int(conn.execute(
+                "SELECT COUNT(*) n FROM pertanyaan WHERE aktif = 1"
+            ).fetchone()["n"])
+    except sqlite3.Error:
+        return 0
 
 
 def get_pengaturan() -> dict[str, float | int]:

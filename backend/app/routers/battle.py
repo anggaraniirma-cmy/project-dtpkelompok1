@@ -45,6 +45,14 @@ def start(payload: BattleStartPayload | None = None):
         "poin_benar": config.POIN_BENAR,
         "jumlah_soal": int(pengaturan["jumlah_soal"]),
     }
+    # Transparansi: berapa soal diminta vs dipakai (mode battle).
+    diminta = int(jumlah or pengaturan["jumlah_soal"])
+    dipakai = int(state.get("total_soal") or 0)
+    state["permintaan_soal"] = {
+        "diminta": diminta,
+        "dipakai": dipakai,
+        "kurang": max(0, diminta - dipakai),
+    }
     return state
 
 

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 
 from .. import database, galeri
-from ..schemas import PasswordPayload, PengaturanPayload, QuestionPayload
+from ..schemas import PasswordPayload, PengaturanPayload, PublikPayload, QuestionPayload
 from ..security import (
     hash_password,
     require_admin,
@@ -174,6 +174,19 @@ def list_galeri(
 ):
     """Daftar foto dokumentasi (metadata saja, bukan isi berkas)."""
     return galeri.daftar(limit=limit, offset=offset, mode=mode)
+
+
+@router.put("/galeri/{foto_id}/publik", status_code=status.HTTP_200_OK)
+def set_publik_galeri(foto_id: int, payload: PublikPayload):
+    """Setujui / tarik persetujuan tampil foto di carousel hero publik.
+
+    Ini satu-satunya jalur yang bisa membuat foto pengunjung tayang di
+    halaman publik, dan wajib token panitia.
+    """
+    hasil = galeri.set_publik(foto_id, payload.publik)
+    if hasil is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Foto tidak ditemukan")
+    return {"ok": True, **hasil}
 
 
 @media_router.get("/galeri/{nama_file}", dependencies=[Depends(require_admin_media)])

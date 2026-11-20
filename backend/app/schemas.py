@@ -50,12 +50,14 @@ class BattleAnswerPayload(BaseModel):
 
 
 class BattleStartPayload(BaseModel):
+    """Jumlah soal yang diterima 1..20; halaman pengunjung menawarkan 5/7/10."""
     jumlah_soal: int | None = Field(default=None, ge=1, le=20)
     nama_pemain_1: str | None = Field(default=None, max_length=24)
     nama_pemain_2: str | None = Field(default=None, max_length=24)
 
 
 class StartPayload(BaseModel):
+    """Jumlah soal yang diterima 1..20; halaman pengunjung menawarkan 5/7/10."""
     jumlah_soal: int | None = Field(default=None, ge=1, le=20)
 
 
@@ -69,6 +71,12 @@ class PengaturanPayload(BaseModel):
 
     def terisi(self) -> dict[str, float | int]:
         return {k: v for k, v in self.model_dump().items() if v is not None}
+
+
+class PublikPayload(BaseModel):
+    """Persetujuan tampil foto di carousel hero publik (panel admin)."""
+
+    publik: bool
 
 
 class PasswordPayload(BaseModel):

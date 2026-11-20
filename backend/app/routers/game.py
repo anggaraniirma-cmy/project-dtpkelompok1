@@ -36,6 +36,15 @@ def start(payload: StartPayload | None = None):
         "poin_benar": config.POIN_BENAR,
         "jumlah_soal": int(pengaturan["jumlah_soal"]),
     }
+    # Transparansi: berapa soal diminta vs dipakai. Bila bank soal kurang,
+    # permainan tetap jalan dengan soal yang ada dan UI memberi tahu.
+    diminta = int(jumlah or pengaturan["jumlah_soal"])
+    dipakai = int(state.get("total_soal") or 0)
+    state["permintaan_soal"] = {
+        "diminta": diminta,
+        "dipakai": dipakai,
+        "kurang": max(0, diminta - dipakai),
+    }
     return state
 
 

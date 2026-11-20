@@ -218,6 +218,61 @@ def daftar(limit: int = 60, offset: int = 0, mode: Optional[str] = None) -> dict
     return {"total": total, "items": [dict(r) for r in rows]}
 
 
+# --------------------------------------------------------- publikasi carousel
+MAKS_PROMOSI = 5
+
+
+def daftar_publik(limit: int = MAKS_PROMOSI) -> dict:
+    """Foto yang SUDAH disetujui panitia untuk tampil di hero publik.
+
+    Hanya metadata yang aman (tanpa sesi_id, tanpa nama pemain), diurutkan
+    dari yang TERBARU. Berkas yang sudah hilang dari disk tidak ikut
+    dikembalikan agar carousel tidak menampilkan gambar rusak.
+    """
+    limit = max(1, min(int(limit), MAKS_PROMOSI))
+    with database.get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, nama_file, mode, created_at, publik_at"
+            " FROM galeri_foto WHERE publik = 1"
+            " ORDER BY created_at DESC, id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+
+    items = []
+    for row in rows:
+        if ambil_file(row["nama_file"], thumb=True) is None:
+            continue      # berkas hilang/tidak sah: jangan tampilkan
+        items.append({
+            "id": row["id"],
+            "nama_file": row["nama_file"],
+            "mode": row["mode"],
+            "created_at": row["created_at"],
+            "publik_at": row["publik_at"],
+            # URL dibangun frontend dari nama berkas yang sudah divalidasi
+            # regex server-side; tidak ada path mentah dari disk.
+            "thumb_url": f"/api/galeri/publik/{row['nama_file']}?thumb=1",
+            "url": f"/api/galeri/publik/{row['nama_file']}",
+        })
+    return {"total": len(items), "maks": MAKS_PROMOSI, "items": items}
+
+
+def set_publik(foto_id: int, publik: bool) -> Optional[dict]:
+    """Setujui / tarik persetujuan tampil publik satu foto."""
+    ts = database.now_iso() if publik else None
+    with database.get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, nama_file FROM galeri_foto WHERE id=?", (foto_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        conn.execute(
+            "UPDATE galeri_foto SET publik=?, publik_at=? WHERE id=?",
+            (1 if publik else 0, ts, foto_id),
+        )
+    return {"id": foto_id, "nama_file": row["nama_file"], "publik": bool(publik),
+            "publik_at": ts}
+
+
 def ambil_file(nama_file: str, thumb: bool = False) -> Optional[Path]:
     """Path file foto (atau thumbnail-nya), None bila tidak ada / nama tidak sah."""
     if not _NAMA_SAH.match(nama_file or ""):

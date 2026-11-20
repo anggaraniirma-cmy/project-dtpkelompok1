@@ -12,6 +12,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 
 from .. import config, galeri
 
@@ -79,3 +80,41 @@ async def unggah_foto(
 
     log.info("foto galeri tersimpan: %s (%s)", hasil["nama_file"], hasil["mode"])
     return {"ok": True, **hasil}
+
+
+# ------------------------------------------------------- promosi (publik) ---
+# Endpoint baca publik HANYA untuk carousel hero. Batasannya:
+#   * daftar maksimum 5 foto, hanya yang `publik = 1` (disetujui panitia);
+#   * berkas disajikan satu per satu lewat nama yang divalidasi ketat;
+#   * tidak ada token admin, tidak ada endpoint daftar-seluruh-galeri.
+@router.get("/publik")
+def daftar_publik():
+    """Daftar maksimal 5 foto promosi yang sudah disetujui panitia."""
+    return galeri.daftar_publik()
+
+
+@router.get("/publik/{nama_file}")
+def berkas_publik(nama_file: str, thumb: bool = False):
+    """Sajikan satu berkas foto promosi.
+
+    Foto hanya keluar bila statusnya `publik = 1`; nama file tetap diperiksa
+    regex + resolusi path di `galeri.ambil_file` (anti path traversal).
+    """
+    with galeri.database.get_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM galeri_foto WHERE nama_file = ? AND publik = 1",
+            (nama_file,),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Foto tidak tersedia")
+
+    path = galeri.ambil_file(nama_file, thumb=thumb)
+    if path is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Foto tidak tersedia")
+
+    media = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
+    return FileResponse(
+        path,
+        media_type=media,
+        headers={"Cache-Control": "public, max-age=300"},
+    )

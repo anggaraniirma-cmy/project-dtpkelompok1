@@ -10,6 +10,14 @@ melalui **FastAPI**.
 
 > Cara menjalankan langkah demi langkah (install, model, URL, troubleshooting):
 > lihat **`CARA-RUN.md`**. Daftar library ada di `requirements.txt`.
+>
+> Dokumentasi arsitektur:
+> - **`docs/PANDUAN_TIM_DAN_PENGUNJUNG.md`** — penjelasan ramah untuk anggota
+>   tim dan pengunjung pameran (cara kerja, cara menjelaskan, yang boleh dan
+>   tidak boleh diklaim).
+> - **`docs/ARSITEKTUR_SKOMDA_GESTURE_QUIZ.md`** — dokumen teknis lengkap
+>   (bagian A–L) untuk presentasi ke juri: diagram, skema database, endpoint,
+>   keamanan, keterbatasan.
 
 ---
 

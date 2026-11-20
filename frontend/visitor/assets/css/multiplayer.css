@@ -54,6 +54,36 @@
 .link-inline { color: var(--slate); text-decoration: underline; text-underline-offset: 3px; }
 .link-inline:hover { color: var(--red); }
 
+/* ------------------------------------------------------------------ jumlah soal */
+/* Pemilih jumlah soal (5 / 7 / 10) di kartu mode. */
+.qty-pick {
+  display: flex; flex-direction: column; gap: 7px;
+  margin: 2px 0 12px;
+}
+.qty-label {
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.12em;
+  color: var(--slate-400); text-transform: uppercase;
+}
+.qty-opts { display: flex; gap: 6px; }
+.qty-opt {
+  flex: 1; min-width: 0;
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  padding: 8px 0; border-radius: 9px; cursor: pointer;
+  background: var(--white); border: 1.5px solid var(--line);
+  color: var(--slate); transition: 0.16s var(--ease);
+}
+.qty-opt:hover { border-color: var(--red); color: var(--red); }
+.qty-opt.is-active {
+  background: var(--red); border-color: var(--red); color: #fff;
+  box-shadow: 0 4px 12px rgba(228, 0, 43, 0.26);
+}
+.qty-opt:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.qty-note {
+  font-size: 10.5px; line-height: 1.45; color: var(--slate-400);
+  min-height: 0;
+}
+.qty-note.is-warn { color: var(--warn); }
+
 /* =========================================================================
    2 PLAYER BATTLE — papan skor pemain
    ========================================================================= */

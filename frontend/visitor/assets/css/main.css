@@ -394,6 +394,111 @@ main { flex: 1; }
 }
 .cap-mark { color: var(--red); font-size: 9px; line-height: 1.9; flex: none; }
 
+/* ------------------------------------------------------------- carousel --- */
+/* Bingkai carousel: rasio tetap 4:3 supaya tinggi tidak melompat saat foto
+   berganti (mencegah layout shift yang mengganggu tombol di sebelahnya). */
+.carousel-frame {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--navy);
+  overflow: hidden;
+}
+.carousel-track {
+  position: absolute; inset: 0;
+}
+/* Slide ditumpuk; transisi hanya opacity (compositor) -> ringan. */
+.carousel-slide {
+  position: absolute; inset: 0;
+  opacity: 0;
+  transition: opacity 0.55s var(--ease);
+  will-change: opacity;
+  pointer-events: none;
+}
+.carousel-slide.is-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+.carousel-slide img {
+  display: block; width: 100%; height: 100%;
+  /* contain (bukan cover): foto peserta tidak terpotong berlebihan; sisa
+     ruang diisi warna navy agar tetap rapi. */
+  object-fit: contain;
+  background: var(--navy);
+}
+
+.carousel-skeleton {
+  position: absolute; inset: 0;
+  background: linear-gradient(100deg, #0d1930 30%, #16243d 50%, #0d1930 70%);
+  background-size: 220% 100%;
+  animation: carouselShimmer 1.4s linear infinite;
+}
+@keyframes carouselShimmer {
+  from { background-position: 140% 0; }
+  to   { background-position: -40% 0; }
+}
+
+/* Navigasi kiri/kanan */
+.carousel-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(11, 21, 38, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff; cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: 0.18s var(--ease);
+  z-index: 2;
+}
+.carousel-nav:hover { background: var(--red); border-color: var(--red); }
+.carousel-nav:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.carousel-nav.is-prev { left: 10px; }
+.carousel-nav.is-next { right: 10px; }
+.carousel-nav[hidden] { display: none; }
+
+/* Kaki carousel: dots + caption */
+.carousel-foot {
+  display: flex; flex-direction: column; gap: 9px;
+}
+.carousel-dots {
+  display: flex; gap: 6px; align-items: center;
+}
+.carousel-dots[hidden] { display: none; }
+.carousel-dot {
+  width: 7px; height: 7px; padding: 0; border-radius: 999px;
+  border: 0; cursor: pointer;
+  background: var(--line-strong);
+  transition: 0.2s var(--ease);
+}
+.carousel-dot:hover { background: var(--slate-400); }
+.carousel-dot.is-active {
+  width: 22px;
+  background: var(--red);
+}
+
+/* Fallback bila belum ada foto disetujui / semua gagal dimuat */
+.carousel-fallback {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+}
+.carousel-fallback[hidden] { display: none; }
+.carousel-fallback img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  filter: saturate(0.9) brightness(0.72);
+}
+/* Gambar fallback gagal dimuat: sisakan latar navy, keterangan tetap terbaca. */
+.carousel-fallback img.is-broken { display: none; }
+.carousel-fallback:has(img.is-broken) { background: var(--navy); }
+.carousel-fallback-note {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(11, 21, 38, 0), rgba(11, 21, 38, 0.92));
+  color: #fff;
+}
+.carousel-fallback-note strong { font-size: 12px; font-weight: 700; }
+.carousel-fallback-note span { font-size: 10.5px; color: rgba(255, 255, 255, 0.72); }
+
 /* --------------------------------------------------------------- features */
 .feature-row {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
@@ -747,6 +852,10 @@ main { flex: 1; }
   .hero-photo { padding: 14px 14px 12px; border-radius: 18px; }
   .hero-photo-frame { border-radius: 14px; }
   .hero-photo-cap { font-size: 11px; }
+  .carousel-nav { width: 30px; height: 30px; }
+  .carousel-nav.is-prev { left: 6px; }
+  .carousel-nav.is-next { right: 6px; }
+  .carousel-dot.is-active { width: 18px; }
   .hero-actions .btn { width: 100%; }
   .gesture-grid { grid-template-columns: 1fr; }
   .question-card { padding: 20px; }

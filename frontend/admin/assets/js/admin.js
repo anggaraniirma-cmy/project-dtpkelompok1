@@ -620,6 +620,7 @@ function kartuFoto(f) {
       <button class="foto-thumb" data-zoom="${escapeHtml(f.nama_file)}" type="button"
               aria-label="Perbesar foto ${escapeHtml(f.nama_file)}">
         <span class="foto-badge ${isBattle ? 'is-battle' : ''}">${isBattle ? '2P' : '1P'}</span>
+        ${f.publik ? '<span class="foto-badge is-publik" title="Tampil di carousel publik">PUBLIK</span>' : ''}
         <img src="${fotoUrl(f.nama_file, true)}" alt="Foto dokumentasi ${escapeHtml(f.nama_file)}"
              loading="eager" decoding="async" />
         <span class="zoom-hint">KLIK UNTUK PERBESAR</span>
@@ -630,6 +631,9 @@ function kartuFoto(f) {
         <span class="foto-sub">${sub}</span>
         <span class="foto-meta">${tanggalTeks(f.created_at)} · ${ukuranTeks(f.ukuran)}</span>
         <div class="foto-actions">
+          <button class="btn btn-ghost" data-publik="${f.id}" data-nilai="${f.publik ? '0' : '1'}">
+            ${f.publik ? 'Sembunyikan dari hero' : 'Tampilkan di hero'}
+          </button>
           <a class="btn btn-ghost" href="${fotoUrl(f.nama_file)}"
              download="${escapeHtml(f.nama_file)}">Unduh</a>
           <button class="btn btn-ghost" data-hapus="${f.id}">Hapus</button>
@@ -697,6 +701,21 @@ function bukaLightbox(nama) {
 function tutupLightbox() {
   const box = $('#lightbox');
   if (box) box.classList.remove('is-show');
+}
+
+async function setPublikFoto(id, nilai) {
+  try {
+    const res = await api(`/api/admin/galeri/${id}/publik`, {
+      method: 'PUT',
+      body: JSON.stringify({ publik: nilai === '1' }),
+    });
+    toast(res.publik
+      ? 'Foto ditampilkan di carousel hero pengunjung.'
+      : 'Foto disembunyikan dari carousel hero.', false);
+    loadGaleri();
+  } catch (err) {
+    toast(err.message);
+  }
 }
 
 async function hapusFoto(id, nama) {
@@ -847,7 +866,9 @@ function bind() {
     grid.addEventListener('click', (e) => {
       const zoom = e.target.closest('[data-zoom]');
       const del = e.target.closest('[data-hapus]');
+      const pub = e.target.closest('[data-publik]');
       if (zoom) bukaLightbox(zoom.dataset.zoom);
+      if (pub) setPublikFoto(Number(pub.dataset.publik), pub.dataset.nilai);
       if (del) {
         const card = del.closest('.foto-card');
         hapusFoto(Number(del.dataset.hapus), card ? card.dataset.nama : '');

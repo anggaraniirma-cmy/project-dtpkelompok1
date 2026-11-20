@@ -106,6 +106,8 @@ class GameEngine:
     def start(self, jumlah_soal: Optional[int] = None) -> Sesi:
         pengaturan = database.get_pengaturan()
         jumlah = jumlah_soal or int(pengaturan["jumlah_soal"])
+        # `LIMIT ?` otomatis memakai seluruh soal yang ada bila bank soal
+        # lebih sedikit dari yang diminta (mis. minta 10, tersedia 9).
         with database.get_conn() as conn:
             rows = conn.execute(
                 "SELECT * FROM pertanyaan WHERE aktif = 1 ORDER BY RANDOM() LIMIT ?",
@@ -136,6 +138,9 @@ class GameEngine:
         self._sesi = sesi
         self._last_reset = time.monotonic()
         self._pending_advance_at = None
+        # Berapa soal yang DIMINTA vs yang benar-benar dipakai. Dipakai
+        # endpoint start untuk memberi tahu UI bila bank soal kurang.
+        self._diminta = int(jumlah)
         with database.get_conn() as conn:
             conn.execute(
                 "INSERT INTO sesi_permainan (id, total_soal, benar, skor, status, started_at)"

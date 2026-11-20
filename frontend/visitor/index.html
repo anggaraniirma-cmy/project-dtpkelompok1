@@ -96,6 +96,20 @@
               <li>Tahan 1 detik untuk mengunci</li>
               <li>Predikat &amp; riwayat jawaban</li>
             </ul>
+
+            <!-- Pilihan jumlah soal. Nilai default & daftar pilihan diambil
+                 dari backend (/api/info) supaya tidak menyimpang dari server. -->
+            <div class="qty-pick" data-qty-for="single" role="group"
+                 aria-label="Jumlah soal Single Player">
+              <span class="qty-label">JUMLAH SOAL</span>
+              <div class="qty-opts" id="qtySingle">
+                <button type="button" class="qty-opt is-active" data-qty="5" aria-pressed="true">5</button>
+                <button type="button" class="qty-opt" data-qty="7" aria-pressed="false">7</button>
+                <button type="button" class="qty-opt" data-qty="10" aria-pressed="false">10</button>
+              </div>
+              <span class="qty-note" id="qtyNoteSingle"></span>
+            </div>
+
             <button class="btn btn-primary btn-lg mode-btn" id="btnStart">
               <span>MULAI BERMAIN</span>
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
@@ -116,6 +130,18 @@
               <li>Keduanya memakai tangan kanan</li>
               <li>Pemenang &amp; status seri</li>
             </ul>
+
+            <div class="qty-pick" data-qty-for="battle" role="group"
+                 aria-label="Jumlah soal 2 Player Battle">
+              <span class="qty-label">JUMLAH SOAL</span>
+              <div class="qty-opts" id="qtyBattle">
+                <button type="button" class="qty-opt is-active" data-qty="5" aria-pressed="true">5</button>
+                <button type="button" class="qty-opt" data-qty="7" aria-pressed="false">7</button>
+                <button type="button" class="qty-opt" data-qty="10" aria-pressed="false">10</button>
+              </div>
+              <span class="qty-note" id="qtyNoteBattle"></span>
+            </div>
+
             <button class="btn btn-primary btn-lg mode-btn" id="btnStartBattle">
               <span>MULAI BATTLE</span>
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
@@ -134,11 +160,13 @@
       </div>
 
       <div class="hero-visual">
-        <!-- Foto dokumentasi pameran. Berkas asli tetap di
-             backend/data/foto/fotocontoh.png dan disajikan sebagai
-             assets/foto/fotocontoh.png oleh scripts/serve_frontend.py
-             (tidak disalin, tidak dipindahkan). -->
-        <figure class="hero-photo" id="heroPhotoCard">
+        <!-- Carousel dokumentasi peserta. Daftar foto TIDAK di-hardcode:
+             diisi assets/js/carousel.js dari GET /api/galeri/publik, yang
+             hanya mengembalikan foto berstatus `publik = 1` (disetujui
+             panitia), maksimal 5, terbaru lebih dulu. Tanpa token admin.
+             Bila belum ada foto yang disetujui, tampil fallback statis. -->
+        <figure class="hero-photo hero-carousel" id="heroCarousel"
+                aria-roledescription="carousel" aria-label="Dokumentasi peserta SKOMDA Gesture Quiz">
           <div class="hero-photo-head">
             <span class="hook-kicker"><i class="dot dot-red"></i> SUDAH COBA DI PAMERAN</span>
             <p class="hook-line">
@@ -147,22 +175,52 @@
             </p>
           </div>
 
-          <div class="hero-photo-frame">
-            <img id="heroPhoto"
-                 src="assets/foto/fotocontoh.png"
-                 alt="Pengunjung mencoba SKOMDA Gesture Quiz dengan gerakan tangan di pameran SMK Telkom Sidoarjo"
-                 width="1200" height="900" decoding="async" />
-            <span class="hero-photo-tag" aria-hidden="true">
+          <div class="hero-photo-frame carousel-frame" id="carouselFrame">
+            <div class="carousel-track" id="carouselTrack" aria-live="off">
+              <!-- slide diisi carousel.js; skeleton ini hanya untuk keadaan awal -->
+              <div class="carousel-slide is-active" data-skeleton="1">
+                <div class="carousel-skeleton" aria-hidden="true"></div>
+              </div>
+            </div>
+
+            <span class="hero-photo-tag" id="carouselTag" aria-hidden="true">
               <i class="dot dot-red"></i> LIVE · COMPUTER VISION
             </span>
             <span class="hero-photo-accent" aria-hidden="true"></span>
+
+            <!-- Navigasi manual: disembunyikan bila foto kurang dari 2 -->
+            <button type="button" class="carousel-nav is-prev" id="carouselPrev"
+                    aria-label="Foto sebelumnya" hidden>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path fill="currentColor" d="M15.4 5.4 8.8 12l6.6 6.6 1.4-1.4L11.6 12l5.2-5.2z"/>
+              </svg>
+            </button>
+            <button type="button" class="carousel-nav is-next" id="carouselNext"
+                    aria-label="Foto berikutnya" hidden>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path fill="currentColor" d="M8.6 5.4 7.2 6.8 12.4 12l-5.2 5.2 1.4 1.4L15.2 12z"/>
+              </svg>
+            </button>
+
+            <!-- Fallback: tampil bila belum ada foto yang disetujui panitia -->
+            <div class="carousel-fallback" id="carouselFallback" hidden>
+              <img src="assets/foto/fotocontoh.png" alt="Suasana booth SKOMDA Gesture Quiz"
+                   width="1200" height="900" decoding="async" />
+              <div class="carousel-fallback-note">
+                <strong>Belum ada foto yang dipublikasikan</strong>
+                <span>Foto peserta muncul di sini setelah panitia menyetujuinya di panel admin.</span>
+              </div>
+            </div>
           </div>
 
-          <figcaption class="hero-photo-cap">
-            <span class="cap-mark" aria-hidden="true">◉</span>
-            Antrean pengunjung di booth SKOMDA Gesture Quiz — jawab pakai gerakan tangan,
-            tanpa keyboard dan tanpa sentuhan.
-          </figcaption>
+          <div class="carousel-foot">
+            <div class="carousel-dots" id="carouselDots" role="tablist"
+                 aria-label="Pilih foto dokumentasi" hidden></div>
+            <figcaption class="hero-photo-cap" id="carouselCaption">
+              <span class="cap-mark" aria-hidden="true">◉</span>
+              <span id="carouselCaptionText">Dokumentasi peserta SKOMDA Gesture Quiz.</span>
+            </figcaption>
+          </div>
         </figure>
 
         <div class="scan-card" id="panduan">
@@ -630,6 +688,8 @@
      memakai http://localhost:8000 sebagai default. -->
 <script src="config.js"></script>
 <script src="assets/js/sfx.js"></script>
+<script src="assets/js/carousel.js"></script>
+<script src="assets/js/jumlah-soal.js"></script>
 <script src="assets/js/app.js"></script>
 <script src="assets/js/battle.js"></script>
 <script src="assets/js/photo.js"></script>

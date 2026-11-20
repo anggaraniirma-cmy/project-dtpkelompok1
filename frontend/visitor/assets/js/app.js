@@ -111,9 +111,21 @@ async function startGame() {
       return null;
     });
 
-    // Jumlah soal ditentukan panitia lewat panel admin (pengaturan), jadi
-    // backend dipanggil tanpa parameter jumlah_soal.
-    const gs = await api('/api/game/start', { method: 'POST', body: '{}' });
+    // Jumlah soal dipilih pengunjung di kartu mode (5/7/10). Bila modul
+    // pemilih belum siap, backend memakai pengaturan panitia.
+    const qty = window.skomdaJumlahSoal
+      ? window.skomdaJumlahSoal.jumlah('single')
+      : null;
+    const gs = await api('/api/game/start', {
+      method: 'POST',
+      body: JSON.stringify(qty ? { jumlah_soal: qty } : {}),
+    });
+
+    // Bank soal bisa lebih sedikit dari pilihan: beri tahu jujur, jangan diam.
+    const pm = gs.permintaan_soal;
+    if (pm && pm.kurang > 0) {
+      toast(`Bank soal hanya ${pm.dipakai} soal — permainan memakai ${pm.dipakai} soal.`, true);
+    }
 
     state.game = gs;
     state.locked = false;
@@ -596,32 +608,8 @@ document.addEventListener('DOMContentLoaded', () => {
     opt.addEventListener('click', () => manualAnswer(opt.dataset.choice));
   });
 
-  // Foto hero: bila static server tidak memetakan assets/foto/ (mis. halaman
-  // dibuka lewat server statis lain), pakai route backend sebagai cadangan.
-  // Bila keduanya gagal (berkas belum ada di mesin ini), kartu foto tetap
-  // tampil rapi dengan keterangan — bukan ikon gambar rusak.
-  const heroPhoto = $('#heroPhoto');
-  if (heroPhoto) {
-    const gagalTotal = () => {
-      heroPhoto.style.display = 'none';
-      const frame = heroPhoto.closest('.hero-photo-frame');
-      if (frame && !frame.querySelector('.hero-photo-fallback')) {
-        const ph = document.createElement('div');
-        ph.className = 'hero-photo-fallback';
-        ph.textContent = 'Foto dokumentasi pameran belum tersedia di mesin ini.';
-        frame.appendChild(ph);
-      }
-    };
-    const fallbackHero = () => {
-      if (heroPhoto.dataset.fallback === '1') { gagalTotal(); return; }
-      heroPhoto.dataset.fallback = '1';
-      heroPhoto.src = `${API}/api/media/fotocontoh.png`;
-    };
-    heroPhoto.addEventListener('error', fallbackHero);
-    // Bila gambar sudah gagal SEBELUM listener terpasang, event error tidak
-    // akan terulang; periksa hasil muatnya langsung.
-    if (heroPhoto.complete && heroPhoto.naturalWidth === 0) fallbackHero();
-  }
+  // Carousel hero mengurus fotonya sendiri (assets/js/carousel.js). Tidak ada
+  // lagi gambar tunggal #heroPhoto di halaman.
 
   checkApi();
   setInterval(() => { if (state.screen === 'landing') checkApi(); }, 15000);

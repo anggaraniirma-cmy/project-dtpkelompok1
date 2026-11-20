@@ -49,6 +49,17 @@ QUIZ_LENGTH = int(os.getenv("SKOMDA_QUIZ_LENGTH", "5"))
 DEFAULT_DURATION = int(os.getenv("SKOMDA_DEFAULT_DURATION", "30"))
 POIN_BENAR = 10
 
+# Pilihan jumlah soal yang boleh dipilih pengunjung di halaman utama.
+# Daftar ini SATU-SATUNYA sumber kebenaran: divalidasi di backend (Pydantic
+# model lewat service.jumlah_soal_sah()) dan dikirim ke frontend lewat
+# /api/info, sehingga tombol di halaman tidak bisa menyimpang dari aturan
+# server walau kode frontend diubah.
+JUMLAH_SOAL_PILIHAN = (5, 7, 10)
+
+# Kalau bank soal aktif lebih sedikit dari yang diminta, permainan tetap
+# berjalan dengan soal yang tersedia (tidak error), dan UI diberi tahu.
+JUMLAH_SOAL_MAKS = 20
+
 # Jeda (detik) antara "waktu habis / jawaban dicatat" dan soal berikutnya,
 # ditegakkan server-side oleh GameEngine.tick() sehingga browser yang menutup
 # tab tidak membuat sesi menggantung.
