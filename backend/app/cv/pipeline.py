@@ -32,8 +32,9 @@ from . import overlay
 from .camera import CameraError, CameraStream
 from .gesture import GestureClassifier, GestureResult
 from .landmarks import HandDetector, HandObservation
-from .players import PlayerSplitter
+from .players import PlayerSplitter, PlayerTracker
 from .stabilizer import GestureStabilizer
+from .tracking import FilterPenolakan, HandFilter, HandTracker, TrackedHand, palm_width_norm
 
 
 @dataclass
@@ -54,6 +55,18 @@ class PipelineStatus:
     # mode battle: {"1": {...}, "2": {...}} — lihat _process_battle()
     pemain: dict[str, dict[str, Any]] = field(default_factory=dict)
     peringatan: list[str] = field(default_factory=list)
+    # --- seleksi tangan (mode keramaian pameran) --------------------------
+    # Jumlah tangan yang BENAR-BENAR dipakai sebagai input pemain.
+    tangan_terlihat: int = 0
+    # Jumlah kandidat mentah dari MediaPipe sebelum difilter.
+    tangan_mentah: int = 0
+    # Kandidat yang ditolak, dirinci per alasan: terlalu_kecil / luar_area /
+    # skor_rendah. Dipakai UI untuk menjelaskan kenapa tangan tidak terbaca.
+    tangan_ditolak: dict[str, int] = field(default_factory=dict)
+    # Status satu pemain (single player): lihat KODE_STATUS di pipeline.
+    status: str = "tidak_ada"
+    # Apakah ada tangan pemain yang benar-benar terdeteksi di frame ini.
+    terdeteksi: bool = False
 
 
 class VisionPipeline:
@@ -68,9 +81,28 @@ class VisionPipeline:
                  rearm_seconds: Optional[float] = None):
         self.mode = "battle" if mode == "battle" else "single"
         self.camera = camera or CameraStream()
-        num_hands = 2 if self.mode == "battle" else 1
+        # Mode single sengaja meminta BEBERAPA kandidat: sistem harus bisa
+        # melihat tangan orang di latar belakang lalu MENOLAKNYA, bukan
+        # menerimanya sebagai satu-satunya hasil deteksi.
+        num_hands = config.MAX_HANDS_BATTLE if self.mode == "battle" else config.MAX_HANDS_SINGLE
         self.detector = detector or HandDetector(num_hands=num_hands)
         self.classifier = classifier or GestureClassifier()
+
+        # Gerbang kualitas + tracking identitas (lihat cv/tracking.py).
+        self.filter = HandFilter(
+            roi=config.HAND_ROI,
+            min_palm_width=config.HAND_MIN_PALM_WIDTH,
+        )
+        self.tracker = HandTracker(
+            max_miss_seconds=config.TRACK_MAX_MISS_SECONDS,
+            dist_max=config.TRACK_DIST_MAX,
+        )
+        self.player_tracker = PlayerTracker(memory_seconds=config.PLAYER_MEMORY_SECONDS)
+        # Pemilihan tangan utama (mode single) dipertahankan antar frame.
+        self._primary_track: Optional[int] = None
+        self._tolak_terakhir = FilterPenolakan()
+        self._mentah_terakhir = 0
+        self._tracked_terakhir: list[TrackedHand] = []
 
         # Parameter stabilizer dipakai lagi untuk pemain ke-2 di mode battle
         # supaya kedua pemain punya kepekaan yang identik.
@@ -220,9 +252,92 @@ class VisionPipeline:
         ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), q])
         return buf.tobytes() if ok else None
 
-    # -- pemrosesan: satu pemain (perilaku tidak diubah) -------------------
+    # -- seleksi tangan (dipakai kedua mode) --------------------------------
+    def _kandidat(self, frame: np.ndarray) -> list[TrackedHand]:
+        """Deteksi -> gerbang kualitas -> tracking identitas antar frame.
+
+        Ini titik masuk semua input gesture. Tangan yang terlalu jauh, di luar
+        area permainan, atau di bawah ambang keyakinan dibuang DI SINI, sebelum
+        klasifikasi dan sebelum pemilihan pemain.
+        """
+        mentah = self.detector.detect_many(frame)
+        lolos, tolak = self.filter.saring(mentah)
+        tracked = self.tracker.update(lolos)
+        self._tolak_terakhir = tolak
+        self._mentah_terakhir = len(mentah)
+        self._tracked_terakhir = tracked
+        return tracked
+
+    def _pilih_utama(self, tracked: list[TrackedHand]) -> Optional[TrackedHand]:
+        """Tangan utama mode single: yang terbesar (paling dekat kamera).
+
+        Identitasnya dipertahankan antar frame; bila tangan pemain hilang
+        sebentar, sistem TIDAK langsung berpindah ke tangan orang lain di
+        belakang (itu justru sumber jawaban palsu).
+        """
+        by_id = {tr.id: tr for tr in tracked}
+        if self._primary_track in by_id:
+            return by_id[self._primary_track]
+        if self._primary_track is not None and self.tracker.alive(self._primary_track):
+            return None
+        if not tracked:
+            self._primary_track = None
+            return None
+        utama = max(tracked, key=lambda tr: (palm_width_norm(tr.obs), tr.obs.score))
+        self._primary_track = utama.id
+        return utama
+
+    @staticmethod
+    def _kode_status(
+        obs: Optional[HandObservation],
+        res: Optional[GestureResult],
+        stable,
+        zone_ok: bool = True,
+        memori: bool = False,
+        terkunci: bool = False,
+    ) -> str:
+        """Status ringkas untuk UI: satu kode, satu pesan.
+
+        Kode: tidak_ada | memori | zona_salah | tangan_kiri | belum_valid |
+        mengenali | menahan | terkunci
+        """
+        if obs is None:
+            return "memori" if memori else "tidak_ada"
+        if not zone_ok:
+            return "zona_salah"
+        if terkunci or stable.progress >= 0.999:
+            return "terkunci"
+        if stable.gesture:
+            return "menahan" if stable.progress > 0 else "mengenali"
+        if res is not None and not res.hand_ok:
+            return "tangan_kiri"
+        return "belum_valid"
+
+    def _catatan_tolak(self) -> str:
+        t = self._tolak_terakhir
+        if t.total <= 0:
+            return ""
+        bagian = []
+        if t.terlalu_kecil:
+            bagian.append(f"{t.terlalu_kecil} terlalu jauh")
+        if t.luar_area:
+            bagian.append(f"{t.luar_area} di luar area")
+        if t.skor_rendah:
+            bagian.append(f"{t.skor_rendah} kurang yakin")
+        return "Tangan diabaikan (" + ", ".join(bagian) + ") — dekatkan ke kamera."
+
+    def reset_tracking(self) -> None:
+        """Sesi baru: lupakan identitas tangan & pemain."""
+        self.tracker.reset()
+        self.player_tracker.reset()
+        self._primary_track = None
+
+    # -- pemrosesan: satu pemain -------------------------------------------
     def _process(self, frame: np.ndarray, frame_id: int) -> None:
-        obs = self.detector.detect(frame)
+        tracked = self._kandidat(frame)
+        utama = self._pilih_utama(tracked)
+        obs: Optional[HandObservation] = utama.obs if utama is not None else None
+
         result: Optional[GestureResult] = None
         gesture: Optional[str] = None
         if obs is not None:
@@ -253,9 +368,17 @@ class VisionPipeline:
         overlay.draw_hud(
             mirrored, result, stable.gesture, stable.progress,
             self.stabilizer.cooldown_remaining, self._fps, flash,
+            catatan=self._catatan_tolak(),
         )
         jpeg = self._encode(mirrored)
         raw = self._encode(mirrored, quality_override=92)
+
+        if result is not None:
+            reason = result.reason
+        elif self._tolak_terakhir.total:
+            reason = "Tangan di luar area permainan atau terlalu jauh"
+        else:
+            reason = "Tangan tidak terdeteksi"
 
         fingers = {k: v.extended for k, v in (result.fingers.items() if result else [])}
         with self._lock:
@@ -269,7 +392,7 @@ class VisionPipeline:
                 gesture=gesture,
                 gesture_label=result.label if result else "",
                 progress=round(stable.progress, 3),
-                reason=result.reason if result else "Tangan tidak terdeteksi",
+                reason=reason,
                 fingers=fingers,
                 thumb_folded=result.thumb_folded if result else True,
                 handedness=obs.handedness if obs else "None",
@@ -277,12 +400,21 @@ class VisionPipeline:
                 error=None,
                 frame_id=frame_id,
                 mode="single",
+                terdeteksi=obs is not None,
+                tangan_terlihat=1 if obs is not None else 0,
+                tangan_mentah=self._mentah_terakhir,
+                tangan_ditolak=self._tolak_terakhir.as_dict(),
+                status=self._kode_status(obs, result, stable,
+                                         terkunci=bool(stable.locked)),
             )
 
     # -- pemrosesan: dua pemain --------------------------------------------
     def _process_battle(self, frame: np.ndarray, frame_id: int) -> None:
-        detections = self.detector.detect_many(frame)
-        split = self.splitter.assign(detections)
+        tracked = self._kandidat(frame)
+        # Identitas pemain ditentukan PlayerTracker (stateful), BUKAN urutan
+        # hasil MediaPipe dan bukan posisi x mentah per frame.
+        split = self.player_tracker.assign(tracked)
+        split.kandidat = self._mentah_terakhir
         virtual, vgesture = self._active_virtual()
 
         # 1) Klasifikasi sekali per pemain, lalu putuskan gesture yang sah.
@@ -328,6 +460,7 @@ class VisionPipeline:
             {p: stable_map[p].gesture for p in (1, 2)},
             self._fps,
             flash=flash or None,
+            catatan=self._catatan_tolak(),
         )
         jpeg = self._encode(mirrored)
         raw = self._encode(mirrored, quality_override=92)
@@ -336,17 +469,29 @@ class VisionPipeline:
         for p in (1, 2):
             obs, res, gesture_mentah = hasil[p]
             st = stable_map[p]
+            memori = bool(split.memori.get(p, False))
+            reason = (res.reason if res else (
+                "Tangan hilang sesaat — tetap di posisi"
+                if memori else "Tangan tidak terdeteksi"))
             pemain_state[str(p)] = {
                 "nomor": p,
                 "terdeteksi": obs is not None,
                 "gesture": st.gesture,
                 "progress": round(st.progress, 3),
-                "reason": (res.reason if res else "Tangan tidak terdeteksi"),
+                "reason": reason,
                 "label": res.label if res else "",
                 "zona_ok": bool(split.zone_ok.get(p, True)),
                 "palm_x": round(split.palm_x[p], 4) if p in split.palm_x else None,
                 "cooldown": round(self.stabilizers[p].cooldown_remaining, 2),
                 "handedness": obs.handedness if obs else "None",
+                "track_id": split.track_id.get(p),
+                "memori": memori,
+                "status": self._kode_status(
+                    obs, res, st,
+                    zone_ok=bool(split.zone_ok.get(p, True)),
+                    memori=memori,
+                    terkunci=bool(st.locked),
+                ),
             }
 
         with self._lock:
@@ -365,6 +510,11 @@ class VisionPipeline:
                 error=None,
                 frame_id=frame_id,
                 mode="battle",
+                status=pemain_state["1"]["status"],
+                terdeteksi=bool(pemain_state["1"]["terdeteksi"]),
+                tangan_terlihat=len(tracked),
+                tangan_mentah=self._mentah_terakhir,
+                tangan_ditolak=self._tolak_terakhir.as_dict(),
                 pemain=pemain_state,
                 peringatan=list(split.warnings),
             )

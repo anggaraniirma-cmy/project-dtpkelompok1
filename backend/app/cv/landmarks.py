@@ -81,9 +81,9 @@ class HandDetector:
             base_options=BaseOptions(model_asset_path=path),
             running_mode=vision.RunningMode.VIDEO,
             num_hands=num_hands,
-            min_hand_detection_confidence=0.5,
-            min_hand_presence_confidence=0.5,
-            min_tracking_confidence=0.5,
+            min_hand_detection_confidence=config.HAND_DETECTION_CONF,
+            min_hand_presence_confidence=config.HAND_PRESENCE_CONF,
+            min_tracking_confidence=config.HAND_TRACK_CONF,
         )
         self._landmarker = vision.HandLandmarker.create_from_options(options)
         self._lock = threading.Lock()

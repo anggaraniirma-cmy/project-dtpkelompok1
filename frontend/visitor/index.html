@@ -31,6 +31,18 @@
 
     <div class="header-right">
       <span class="pill" id="apiPill"><i class="dot"></i><span id="apiPillText">Menghubungkan…</span></span>
+      <div class="audio-ctl" id="audioCtl" role="group" aria-label="Pengaturan suara permainan">
+        <button type="button" class="audio-btn" id="btnMute" aria-pressed="false" title="Suara permainan">
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+            <path fill="currentColor" d="M4 9h3.2L12 5.5v13L7.2 15H4z"/>
+            <path d="M15.5 8.5a5 5 0 010 7M18.2 6a8.5 8.5 0 010 12" fill="none"
+                  stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          <span id="muteLabel">SFX ON</span>
+        </button>
+        <input type="range" id="volumeRange" class="audio-vol" min="0" max="100" step="5"
+               value="60" aria-label="Volume suara" />
+      </div>
       <a class="ghost-link" href="http://localhost:3000" target="_blank" rel="noopener">Panel Pengunjung</a>
     </div>
   </div>
@@ -58,6 +70,17 @@
           <li><b>03</b> Tahan 1 detik — jawaban terkunci</li>
         </ul>
 
+        <!-- CTA utama di atas lipatan: di layar kios bertinggi 768–900 px,
+             kartu mode di bawah bisa berada di luar layar pertama. Tombol ini
+             memulai Single Player; pilihan Battle tetap ada di kartu mode. -->
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-lg" id="btnStartTop">
+            MULAI BERMAIN
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+          </button>
+          <a class="btn btn-ghost btn-lg" href="#panduan">Lihat panduan gesture</a>
+        </div>
+
         <div class="mode-picker">
           <article class="mode-card">
             <div class="mode-card-head">
@@ -74,7 +97,7 @@
               <li>Predikat &amp; riwayat jawaban</li>
             </ul>
             <button class="btn btn-primary btn-lg mode-btn" id="btnStart">
-              <span>MULAI</span>
+              <span>MULAI BERMAIN</span>
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
             </button>
           </article>
@@ -110,8 +133,39 @@
         </p>
       </div>
 
-      <div class="hero-visual" id="panduan">
-        <div class="scan-card">
+      <div class="hero-visual">
+        <!-- Foto dokumentasi pameran. Berkas asli tetap di
+             backend/data/foto/fotocontoh.png dan disajikan sebagai
+             assets/foto/fotocontoh.png oleh scripts/serve_frontend.py
+             (tidak disalin, tidak dipindahkan). -->
+        <figure class="hero-photo" id="heroPhotoCard">
+          <div class="hero-photo-head">
+            <span class="hook-kicker"><i class="dot dot-red"></i> SUDAH COBA DI PAMERAN</span>
+            <p class="hook-line">
+              Mereka sudah nyoba,
+              <strong>kamu kapan?</strong>
+            </p>
+          </div>
+
+          <div class="hero-photo-frame">
+            <img id="heroPhoto"
+                 src="assets/foto/fotocontoh.png"
+                 alt="Pengunjung mencoba SKOMDA Gesture Quiz dengan gerakan tangan di pameran SMK Telkom Sidoarjo"
+                 width="1200" height="900" decoding="async" />
+            <span class="hero-photo-tag" aria-hidden="true">
+              <i class="dot dot-red"></i> LIVE · COMPUTER VISION
+            </span>
+            <span class="hero-photo-accent" aria-hidden="true"></span>
+          </div>
+
+          <figcaption class="hero-photo-cap">
+            <span class="cap-mark" aria-hidden="true">◉</span>
+            Antrean pengunjung di booth SKOMDA Gesture Quiz — jawab pakai gerakan tangan,
+            tanpa keyboard dan tanpa sentuhan.
+          </figcaption>
+        </figure>
+
+        <div class="scan-card" id="panduan">
           <div class="scan-head">
             <span class="label">PANDUAN GESTURE</span>
             <span class="live-badge"><i class="dot"></i> A/B/C/D</span>
@@ -400,6 +454,7 @@
             <div class="battle-panel" data-player="1" id="bPanel1">
               <div class="bp-head">
                 <span class="bp-name" id="bPanelName1">PLAYER 1 · KIRI</span>
+                <span class="bp-badge" id="bBadge1">MENUNGGU</span>
                 <span class="bp-gesture" id="bGesture1">—</span>
               </div>
               <div class="bp-bar"><span id="bHold1"></span></div>
@@ -409,6 +464,7 @@
             <div class="battle-panel" data-player="2" id="bPanel2">
               <div class="bp-head">
                 <span class="bp-name" id="bPanelName2">PLAYER 2 · KANAN</span>
+                <span class="bp-badge" id="bBadge2">MENUNGGU</span>
                 <span class="bp-gesture" id="bGesture2">—</span>
               </div>
               <div class="bp-bar"><span id="bHold2"></span></div>
@@ -573,6 +629,7 @@
      Bila file ini tidak tersedia (mis. dibuka via file://), app.js
      memakai http://localhost:8000 sebagai default. -->
 <script src="config.js"></script>
+<script src="assets/js/sfx.js"></script>
 <script src="assets/js/app.js"></script>
 <script src="assets/js/battle.js"></script>
 <script src="assets/js/photo.js"></script>

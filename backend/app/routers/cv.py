@@ -75,6 +75,9 @@ def start_camera(mode: str = "single"):
     with _lock:
         if _pipeline is not None and _pipeline.running:
             if _pipeline.mode == mode:
+                # Sesi permainan baru: lupakan identitas tangan/pemain lama
+                # supaya pengunjung sebelumnya tidak "mewarisi" slot pemain.
+                _pipeline.reset_tracking()
                 return {"ok": True, "pesan": "Kamera sudah aktif",
                         "mode": mode, "status": _pipeline.status()}
             # Mode berbeda: lepas pipeline lama dulu agar kamera tidak dibuka

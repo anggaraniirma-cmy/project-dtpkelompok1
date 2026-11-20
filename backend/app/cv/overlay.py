@@ -70,7 +70,10 @@ def draw_hud(
     cooldown: float,
     fps: float,
     locked_flash: str | None = None,
+    catatan: str = "",
 ) -> None:
+    """HUD mode single. `catatan` menjelaskan kandidat tangan yang ditolak
+    (terlalu jauh / di luar area) supaya pengunjung tahu harus apa."""
     h, w = img.shape[:2]
     _rounded_box(img, (10, 10), (250, 46), NAVY, 0.62, 8)
     cv2.putText(img, "SKOMDA GESTURE QUIZ", (20, 34), FONT, 0.5, WHITE, 1, cv2.LINE_AA)
@@ -83,8 +86,9 @@ def draw_hud(
     if result is None:
         cv2.putText(img, "Tangan tidak terdeteksi", (26, panel_top + 34),
                     FONT, 0.62, GREY, 1, cv2.LINE_AA)
-        cv2.putText(img, "Taruh tangan kanan di depan kamera", (26, panel_top + 62),
-                    FONT, 0.48, (120, 120, 120), 1, cv2.LINE_AA)
+        cv2.putText(img, (catatan or "Taruh tangan kanan di depan kamera")[:72],
+                    (26, panel_top + 62), FONT, 0.42,
+                    AMBER if catatan else (120, 120, 120), 1, cv2.LINE_AA)
     elif result.gesture:
         cv2.putText(img, f"{result.gesture}", (26, panel_top + 56), FONT, 1.5, GREEN, 3, cv2.LINE_AA)
         cv2.putText(img, result.label, (86, panel_top + 32), FONT, 0.5, WHITE, 1, cv2.LINE_AA)
@@ -153,6 +157,7 @@ def draw_battle_overlay(
     gesture: dict[int, str | None],
     fps: float,
     flash: dict[int, str] | None = None,
+    catatan: str = "",
 ) -> None:
     """HUD mode 2 Player: garis zona, label pemain, progres tahan per pemain.
 
@@ -219,8 +224,13 @@ def draw_battle_overlay(
             cv2.putText(img, f"P{p}: JAWABAN {letter} TERKUNCI", (x0 + 10, 164),
                         FONT, 0.48, (0, 0, 0), 1, cv2.LINE_AA)
 
-    # Peringatan (tangan kiri / berdempetan) di panel bawah.
-    if getattr(split, "warnings", None):
-        _rounded_box(img, (10, h - 54), (w - 10, h - 12), NAVY, 0.72, 8)
-        cv2.putText(img, split.warnings[0][:74], (22, h - 26),
-                    FONT, 0.46, AMBER, 1, cv2.LINE_AA)
+    # Peringatan (tangan kiri / berdempetan / tangan diabaikan) di panel bawah.
+    pesan = list(getattr(split, "warnings", None) or [])
+    if catatan:
+        pesan.append(catatan)
+    if pesan:
+        tinggi = 54 if len(pesan) == 1 else 74
+        _rounded_box(img, (10, h - tinggi), (w - 10, h - 12), NAVY, 0.72, 8)
+        for i, baris in enumerate(pesan[:2]):
+            y = h - 26 if len(pesan) == 1 else h - 48 + i * 22
+            cv2.putText(img, baris[:78], (22, y), FONT, 0.42, AMBER, 1, cv2.LINE_AA)

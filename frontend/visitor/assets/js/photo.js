@@ -36,6 +36,12 @@
     logo: null,         // HTMLImageElement logo sekolah (bila tersedia)
   };
 
+  function playSfx(nama) {
+    try {
+      if (window.skomdaSfx) window.skomdaSfx.play(nama);
+    } catch (_) { /* audio tidak boleh mengganggu sesi foto */ }
+  }
+
   function toast(msg, isError) {
     if (window.skomdaToast) return window.skomdaToast(msg, isError);
     const el = $('#toast');
@@ -421,6 +427,7 @@
         setPlaceholder(null);
         setButtons({ canSnap: true, canRetake: true, canSave: true });
         P.sent = false;
+        playSfx('photo_captured');
         if (btn) btn.textContent = 'AMBIL FOTO';
         $('#photoTip').textContent =
           'Foto siap. Tekan SIMPAN FOTO untuk mengunduh, atau FOTO ULANG untuk mencoba lagi.';
@@ -612,6 +619,7 @@
     }
     showScreen('photo');
     renderEmpty();
+    playSfx('photo_start');
     setButtons({ canSnap: false, canRetake: false, canSave: false });
     setPlaceholder('Menyiapkan kamera…');
     $('#photoTip').textContent = 'Hadapkan wajah ke kamera, lalu tekan AMBIL FOTO.';

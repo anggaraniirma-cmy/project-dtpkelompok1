@@ -25,6 +25,7 @@ Modul ini murni geometri (tanpa kamera) sehingga bisa diuji langsung.
 """
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from typing import Iterable, Optional
 
@@ -82,6 +83,15 @@ class SplitResult:
     # Tangan kiri / label tidak sah: tidak boleh menjawab.
     wrong_hand: list[HandObservation] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    # --- identitas (dipakai PlayerTracker; kosong untuk PlayerSplitter) -----
+    # id track per pemain, mis. {1: 7, 2: 9}
+    track_id: dict[int, int] = field(default_factory=dict)
+    # apakah pemain benar-benar punya tangan di frame ini
+    terdeteksi: dict[int, bool] = field(default_factory=dict)
+    # slot dipertahankan karena tangan baru hilang sesaat (bukan pemain baru)
+    memori: dict[int, bool] = field(default_factory=dict)
+    # jumlah kandidat mentah sebelum difilter (diisi pipeline, untuk status)
+    kandidat: int = 0
 
     def terisi(self, player: int) -> bool:
         return player in self.hands
@@ -180,3 +190,143 @@ def observation_palsu(x: float, handedness: str = "Right", y: float = 0.5) -> Ha
     return HandObservation(
         landmarks=pts, handedness=handedness, score=0.9, image_size=(640, 480)
     )
+
+
+# --------------------------------------------------------------- stateful ---
+class PlayerTracker:
+    """Pemisah pemain yang MENGINGAT identitas antar frame.
+
+    `PlayerSplitter` di atas hanya melihat satu frame, sehingga:
+      * saat satu tangan hilang sedetik, pemain itu langsung "kosong" dan
+        tangan orang lain bisa masuk ke slotnya;
+      * saat dua tangan menyilang, identitas bisa tertukar.
+
+    Kelas ini menambatkan slot pemain ke ID track (dari cv.tracking), bukan ke
+    posisi x mentah:
+
+      * selama track pemiliknya masih hidup, slot tetap miliknya walau tangan
+        bergeser ke zona lain (zona hanya jadi peringatan, BUKAN alasan
+        menukar pemain);
+      * bila tangan hilang < `memory_seconds`, slotnya ditahan (status
+        "memori") sehingga pemain tidak langsung kehilangan identitas;
+      * tangan baru hanya boleh mengisi slot yang benar-benar kosong, menurut
+        zona tempatnya muncul. Tangan ekstra tidak pernah merebut slot terisi.
+
+    Jaminan lama tetap berlaku: satu tangan tidak bisa menjawab dua pemain,
+    tangan kiri tidak boleh menjawab, dan dua tangan di satu sisi tidak
+    membuat pemain fiktif.
+    """
+
+    def __init__(
+        self,
+        batas: float = ZONA_BATAS,
+        jarak_min: float = JARAK_MIN_PEMAIN,
+        memory_seconds: float = 0.9,
+        clock=time.monotonic,
+    ):
+        self.batas = batas
+        self.jarak_min = jarak_min
+        self.memory_seconds = memory_seconds
+        self._clock = clock
+        self._slot: dict[int, Optional[int]] = {1: None, 2: None}
+        self._last_seen: dict[int, float] = {1: float("-inf"), 2: float("-inf")}
+
+    def reset(self) -> None:
+        """Sesi/pertandingan baru: lupakan identitas lama."""
+        self._slot = {1: None, 2: None}
+        self._last_seen = {1: float("-inf"), 2: float("-inf")}
+
+    # -- inti --------------------------------------------------------------
+    def assign(self, tracked, now: Optional[float] = None) -> SplitResult:
+        """Tentukan pemain dari daftar TrackedHand frame ini."""
+        now = self._clock() if now is None else now
+        out = SplitResult(batas=self.batas)
+        out.kandidat = len(tracked or [])
+
+        sah, kiri = [], []
+        for tr in tracked or []:
+            if tr.obs.handedness in HANDEDNESS_SAH:
+                sah.append(tr)
+            else:
+                kiri.append(tr)
+        out.wrong_hand = [tr.obs for tr in kiri]
+        if kiri:
+            out.warnings.append(
+                "Tangan kiri terdeteksi — setiap pemain memakai tangan KANAN."
+            )
+
+        dipakai: set[int] = set()
+
+        # 1) Pemilik slot yang masih terlihat di frame ini mempertahankan slot.
+        for p in (1, 2):
+            tid = self._slot[p]
+            if tid is None:
+                continue
+            cocok = next((tr for tr in sah if tr.id == tid and tr.id not in dipakai), None)
+            if cocok is not None:
+                self._ikat(out, p, cocok, now)
+                dipakai.add(tid)
+            elif now - self._last_seen[p] <= self.memory_seconds:
+                # Tangan hilang sesaat: slot ditahan, jangan diberikan ke orang lain.
+                out.memori[p] = True
+                out.terdeteksi[p] = False
+                out.zone_ok[p] = True
+            else:
+                self._slot[p] = None
+
+        sisa = [tr for tr in sah if tr.id not in dipakai]
+        bebas = [p for p in (1, 2) if self._slot[p] is None]
+
+        # 2) Dua slot kosong + minimal dua tangan: kiri -> P1, kanan -> P2
+        #    (aturan lama dipertahankan agar dua pemain baru langsung terpasang).
+        if len(bebas) == 2 and len(sisa) >= 2:
+            kiri_t, kanan_t = sisa[0], sisa[-1]
+            if kanan_t.palm_x - kiri_t.palm_x < self.jarak_min:
+                out.warnings.append(
+                    "Kedua tangan terlalu berdekatan — berdiri agak ke samping."
+                )
+                target = zona_dari_x(kiri_t.palm_x, self.batas)
+                self._ikat(out, target, kiri_t, now)
+                out.unassigned.append(kanan_t.obs)
+            else:
+                self._ikat(out, 1, kiri_t, now)
+                self._ikat(out, 2, kanan_t, now)
+        else:
+            # 3) Tangan baru hanya mengisi slot kosong sesuai zonanya.
+            for tr in sisa:
+                z = zona_dari_x(tr.palm_x, self.batas)
+                if z in bebas:
+                    self._ikat(out, z, tr, now)
+                    bebas.remove(z)
+                else:
+                    out.unassigned.append(tr.obs)
+
+        # 4) Status & peringatan.
+        for p in (1, 2):
+            out.terdeteksi.setdefault(p, False)
+            out.memori.setdefault(p, False)
+            out.zone_ok.setdefault(p, True)
+        for p in (1, 2):
+            if out.terdeteksi[p] and not out.zone_ok[p]:
+                out.warnings.append(
+                    f"Player {p} di luar zonanya — geser ke "
+                    f"{'kiri' if p == 1 else 'kanan'} kamera."
+                )
+        if not sah:
+            out.warnings.append("Tidak ada tangan kanan di depan kamera.")
+        # Dedupe tanpa mengubah urutan.
+        out.warnings = list(dict.fromkeys(out.warnings))
+        return out
+
+    def _ikat(self, out: SplitResult, player: int, tr, now: float,
+              zone_ok: Optional[bool] = None) -> None:
+        x = tr.palm_x
+        ok = (zona_dari_x(x, self.batas) == player) if zone_ok is None else zone_ok
+        out.hands[player] = tr.obs
+        out.palm_x[player] = x
+        out.zone_ok[player] = ok
+        out.track_id[player] = tr.id
+        out.terdeteksi[player] = True
+        out.memori[player] = False
+        self._slot[player] = tr.id
+        self._last_seen[player] = now

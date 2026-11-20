@@ -71,6 +71,46 @@ GESTURE_COOLDOWN_SECONDS = float(os.getenv("SKOMDA_GESTURE_COOLDOWN", "1.5"))
 GESTURE_REARM_SECONDS = float(os.getenv("SKOMDA_GESTURE_REARM", "0.25"))
 REQUIRE_RIGHT_HAND = os.getenv("SKOMDA_REQUIRE_RIGHT_HAND", "1") == "1"
 
+# --- Computer vision: seleksi tangan -------------------------------------
+# Ambang keyakinan MediaPipe. Dinaikkan dari 0.5 supaya deteksi "ragu" di
+# keramaian pameran tidak langsung dipakai sebagai jawaban.
+HAND_DETECTION_CONF = float(os.getenv("SKOMDA_HAND_DET_CONF", "0.60"))
+HAND_PRESENCE_CONF = float(os.getenv("SKOMDA_HAND_PRESENCE_CONF", "0.60"))
+HAND_TRACK_CONF = float(os.getenv("SKOMDA_HAND_TRACK_CONF", "0.55"))
+
+# Jumlah maksimum tangan yang diminta ke MediaPipe. Mode single sengaja
+# meminta LEBIH dari satu: tanpa itu, tangan orang di latar belakang bisa
+# menjadi satu-satunya hasil dan otomatis dianggap jawaban pemain. Dengan
+# beberapa kandidat, sistem bisa memilih tangan terdekat lalu menolak sisanya.
+MAX_HANDS_SINGLE = int(os.getenv("SKOMDA_MAX_HANDS_SINGLE", "3"))
+MAX_HANDS_BATTLE = int(os.getenv("SKOMDA_MAX_HANDS_BATTLE", "4"))
+
+# Lebar telapak minimum (|MCP telunjuk - MCP kelingking| / lebar frame).
+# Tangan yang jauh di latar belakang menghasilkan telapak kecil; ambang ini
+# yang membuatnya tidak diterima sebagai input pemain.
+HAND_MIN_PALM_WIDTH = float(os.getenv("SKOMDA_HAND_MIN_PALM", "0.055"))
+
+# Area permainan (x0,y0,x1,y1 ternormalisasi). Tangan yang pusatnya di luar
+# area ini diabaikan. Default membuang strip atas frame, tempat tangan orang
+# yang berdiri di belakang biasanya muncul.
+def _roi_dari_env() -> tuple[float, float, float, float]:
+    raw = os.getenv("SKOMDA_HAND_ROI", "0.02,0.05,0.98,1.0")
+    try:
+        x0, y0, x1, y1 = (float(v) for v in raw.split(","))
+    except (TypeError, ValueError):
+        return (0.02, 0.05, 0.98, 1.0)
+    if not (0.0 <= x0 < x1 <= 1.0 and 0.0 <= y0 < y1 <= 1.0):
+        return (0.02, 0.05, 0.98, 1.0)
+    return (x0, y0, x1, y1)
+
+
+HAND_ROI = _roi_dari_env()
+
+# Tracking identitas antar frame & memori pemain.
+TRACK_MAX_MISS_SECONDS = float(os.getenv("SKOMDA_TRACK_MAX_MISS", "0.8"))
+TRACK_DIST_MAX = float(os.getenv("SKOMDA_TRACK_DIST", "0.30"))
+PLAYER_MEMORY_SECONDS = float(os.getenv("SKOMDA_PLAYER_MEMORY", "0.9"))
+
 # Jalur jawab manual (klik opsi) untuk keadaan darurat saat kamera bermasalah.
 # Aktif secara default; set SKOMDA_ALLOW_MANUAL_ANSWER=0 saat pameran bila
 # panitia ingin jawaban MURNI lewat gesture.

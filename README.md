@@ -288,6 +288,13 @@ dibaca ulang saat kamera dinyalakan, jadi perubahan berlaku pada sesi berikutnya
 | `SKOMDA_FOTO_MAX_BYTES` | `8388608` | batas ukuran satu foto (8 MB) |
 | `SKOMDA_ADVANCE_GRACE` | `2.0` | jeda feedback sebelum soal berikutnya (detik) |
 | `SKOMDA_ABANDON_AFTER` | `120` | sesi ditutup bila ditinggal selama ini (detik) |
+| `SKOMDA_HAND_MIN_PALM` | `0.055` | lebar telapak minimum (fraksi lebar frame); tangan jauh ditolak |
+| `SKOMDA_HAND_ROI` | `0.02,0.05,0.98,1.0` | area permainan `x0,y0,x1,y1`; tangan di luarnya diabaikan |
+| `SKOMDA_HAND_DET_CONF` / `_PRESENCE_CONF` / `_TRACK_CONF` | `0.60` / `0.60` / `0.55` | ambang keyakinan MediaPipe |
+| `SKOMDA_MAX_HANDS_SINGLE` / `_BATTLE` | `3` / `4` | jumlah kandidat tangan yang diminta ke MediaPipe |
+| `SKOMDA_TRACK_MAX_MISS` | `0.8` | toleransi (detik) sebelum ID track dibuang |
+| `SKOMDA_PLAYER_MEMORY` | `0.9` | toleransi (detik) slot pemain ditahan saat tangan hilang |
+| `SKOMDA_GESTURE_HOLD` / `_COOLDOWN` / `_REARM` | `1.0` / `1.5` / `0.25` | kepekaan gesture (bisa juga lewat panel admin) |
 
 > **Sebelum pameran:** ganti password default lewat menu Pengaturan.
 
@@ -296,7 +303,7 @@ dibaca ulang saat kamera dinyalakan, jadi perubahan berlaku pada sesi berikutnya
 ## Pengujian
 
 ```bash
-.venv\Scripts\python.exe -m pytest -q            # harus 163 passed
+.venv\Scripts\python.exe -m pytest -q            # harus 204 passed
 .venv\Scripts\python.exe tests\manual_camera_check.py
 .venv\Scripts\python.exe tests\manual_camera_check.py --gui
 

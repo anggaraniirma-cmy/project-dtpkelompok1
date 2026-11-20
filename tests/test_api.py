@@ -40,6 +40,29 @@ def auth(token):
     return {"Authorization": f"Bearer {token}"}
 
 
+# --------------------------------------------------------------- media publik
+def test_media_fotocontoh_publik_dan_png(client):
+    """Foto hero disajikan dari backend/data/foto tanpa perlu login."""
+    r = client.get("/api/media/fotocontoh.png")
+    if r.status_code == 404:
+        pytest.skip("backend/data/foto/fotocontoh.png tidak ada di mesin ini")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/png"
+    assert len(r.content) > 10_000
+
+
+def test_media_tidak_bisa_dipakai_membaca_foto_galeri(client):
+    """Nama berkas tidak diterima dari klien -> tidak bisa menebak foto galeri."""
+    for nama in ("20261119-085404-c200f5c1.png", "quiz.db", "..%2fquiz.db"):
+        r = client.get(f"/api/media/{nama}")
+        assert r.status_code == 404
+
+
+def test_media_tanpa_login_tapi_galeri_wajib_token(client):
+    assert client.get("/api/media/fotocontoh.png").status_code in (200, 404)
+    assert client.get("/api/admin/galeri").status_code == 401
+
+
 # ---------------------------------------------------------------- kesehatan
 def test_health(client):
     r = client.get("/api/health")

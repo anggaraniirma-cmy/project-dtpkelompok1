@@ -105,6 +105,44 @@ body {
 }
 .ghost-link:hover { color: var(--red); background: var(--red-tint); }
 
+/* ------------------------------------------------------------ audio control */
+.audio-ctl {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--bg); border: 1px solid var(--line);
+  padding: 4px 8px 4px 4px; border-radius: 999px;
+}
+.audio-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--ink); background: var(--white);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 9px; cursor: pointer; transition: 0.18s var(--ease);
+}
+.audio-btn:hover { border-color: var(--red); color: var(--red); }
+.audio-btn.is-muted { color: var(--slate-400); }
+.audio-btn.is-muted svg path:last-child { opacity: 0.25; }
+.audio-btn.is-muted::after {
+  content: ""; position: absolute; width: 18px; height: 1.5px;
+  background: currentColor; transform: rotate(-40deg); border-radius: 1px;
+}
+.audio-btn.is-muted { position: relative; }
+.audio-vol {
+  -webkit-appearance: none; appearance: none;
+  width: 66px; height: 3px; border-radius: 999px; background: var(--line-strong);
+  outline: none; cursor: pointer;
+}
+.audio-vol::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--red); border: 2px solid var(--white);
+  box-shadow: 0 1px 3px rgba(13, 21, 33, 0.28);
+}
+.audio-vol::-moz-range-thumb {
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--red); border: 2px solid var(--white);
+}
+.audio-vol:disabled { opacity: 0.4; cursor: not-allowed; }
+
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 /* ---------------------------------------------------------------- screens */
@@ -270,6 +308,91 @@ main { flex: 1; }
   padding-top: 13px; font-size: 10.5px; font-weight: 600;
 }
 .scan-foot span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ------------------------------------------------- hero photo / promo hook */
+.hero-visual { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+/* Kartu foto dokumentasi pameran. Hook promosi ditempatkan DI LUAR bidang
+   foto (judul di atas, caption di bawah) sehingga tidak menutupi wajah
+   maupun tangan pengunjung di dalam foto. */
+.hero-photo {
+  position: relative;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  padding: 18px 18px 16px;
+  box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; gap: 14px;
+  animation: heroPhotoIn 0.8s var(--ease) both;
+  animation-delay: 0.06s;
+}
+@keyframes heroPhotoIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+.hero-photo-head { display: flex; flex-direction: column; gap: 7px; }
+.hook-kicker {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--red);
+}
+.hook-kicker .dot { animation: pulse 2s var(--ease) infinite; }
+
+.hook-line {
+  font-size: 1.28rem; line-height: 1.2; letter-spacing: -0.02em;
+  font-weight: 600; color: var(--slate);
+}
+.hook-line strong {
+  display: block; margin-top: 2px;
+  font-size: 1.62rem; font-weight: 800; color: var(--ink);
+  letter-spacing: -0.03em;
+}
+.hook-line strong::after {
+  content: ""; display: block; width: 46px; height: 3px; border-radius: 2px;
+  background: var(--red); margin-top: 10px;
+}
+
+.hero-photo-frame {
+  position: relative; border-radius: 18px; overflow: hidden;
+  background: var(--navy);
+  border: 1px solid rgba(228, 0, 43, 0.24);
+  box-shadow: 0 10px 26px rgba(13, 21, 33, 0.16);
+}
+.hero-photo-frame img {
+  display: block; width: 100%; height: auto;
+  aspect-ratio: 4 / 3; object-fit: cover;
+}
+/* Ditampilkan app.js bila foto tidak tersedia sama sekali (mis. clone repo
+   tanpa backend/data/foto/fotocontoh.png) agar kartu tidak tampak rusak. */
+.hero-photo-fallback {
+  display: grid; place-items: center; text-align: center;
+  aspect-ratio: 4 / 3; padding: 24px;
+  font-size: 11.5px; color: rgba(255, 255, 255, 0.62);
+  background: var(--navy);
+}
+/* Aksen merah tipis di sudut kanan atas (satu aksen, bukan gradien penuh). */
+.hero-photo-accent {
+  position: absolute; right: 0; top: 0; width: 62px; height: 62px;
+  background: linear-gradient(225deg, rgba(228, 0, 43, 0.92), rgba(228, 0, 43, 0));
+  clip-path: polygon(100% 0, 0 0, 100% 100%);
+  pointer-events: none;
+}
+.hero-photo-tag {
+  position: absolute; left: 12px; top: 12px;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+  color: #fff; background: rgba(11, 21, 38, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  padding: 5px 9px; border-radius: 999px;
+  backdrop-filter: blur(6px);
+}
+.hero-photo-tag .dot { animation: pulse 1.8s infinite; }
+
+.hero-photo-cap {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 11.5px; line-height: 1.5; color: var(--slate);
+}
+.cap-mark { color: var(--red); font-size: 9px; line-height: 1.9; flex: none; }
 
 /* --------------------------------------------------------------- features */
 .feature-row {
@@ -613,8 +736,17 @@ main { flex: 1; }
   .brand-text em { font-size: 10px; }
   .ghost-link { display: none; }
   .pill { font-size: 10px; padding: 5px 9px; }
+  .audio-ctl { padding: 3px 6px 3px 3px; gap: 6px; }
+  .audio-btn span { display: none; }
+  .audio-btn { padding: 5px; }
+  .audio-vol { width: 46px; }
   .hero h1 { font-size: 1.95rem; }
   .lede { font-size: 0.92rem; }
+  .hook-line { font-size: 1.12rem; }
+  .hook-line strong { font-size: 1.38rem; }
+  .hero-photo { padding: 14px 14px 12px; border-radius: 18px; }
+  .hero-photo-frame { border-radius: 14px; }
+  .hero-photo-cap { font-size: 11px; }
   .hero-actions .btn { width: 100%; }
   .gesture-grid { grid-template-columns: 1fr; }
   .question-card { padding: 20px; }

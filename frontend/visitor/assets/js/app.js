@@ -26,7 +26,17 @@ const state = {
   manualAllowed: true,
   lastQuestionKey: null,
   lastResult: null,
+  lastGestureSeen: null,
+  lowWarned: false,
 };
+
+/* SFX: semua efek lokal (assets/audio). Sebelum pengunjung menekan MULAI,
+   window.skomdaSfx belum "unlocked" sehingga play() tidak berbunyi. */
+function playSfx(nama) {
+  try {
+    if (window.skomdaSfx) window.skomdaSfx.play(nama);
+  } catch (_) { /* audio tidak boleh mengganggu permainan */ }
+}
 
 /* ------------------------------------------------------------------ utils */
 function toast(msg, isError = false) {
@@ -86,6 +96,8 @@ async function checkApi() {
 /* ------------------------------------------------------------------- game */
 async function startGame() {
   const btn = $('#btnStart');
+  // Gesture pengguna pertama: buka audio (tidak ada autoplay sebelum ini).
+  if (window.skomdaSfx) window.skomdaSfx.unlock();
   btn.disabled = true;
   btn.querySelector('span').textContent = 'MENYIAPKAN…';
   try {
@@ -114,6 +126,7 @@ async function startGame() {
     renderQuestion(gs);
     connectWs();
     if (cam) startStream();
+    playSfx('game_start');
   } catch (err) {
     toast(err.message, true);
   } finally {
@@ -144,6 +157,14 @@ function renderQuestion(gs) {
   state.answered = false;
   state.duration = soal.durasi || 30;
   state.deadline = performance.now() + state.duration * 1000;
+  state.lowWarned = false;
+
+  // Suara per pertanyaan: soal pertama = "muncul", berikutnya = "berubah".
+  const kunci = `${gs.sesi_id || ''}-${gs.nomor}`;
+  if (state.lastQuestionKey !== kunci) {
+    state.lastQuestionKey = kunci;
+    playSfx(gs.nomor === 1 ? 'question_appear' : 'question_change');
+  }
 
   $('#qKategori').textContent = soal.kategori || 'UMUM';
   $('#qIndex').textContent = `SOAL ${String(gs.nomor).padStart(2, '0')}`;
@@ -199,6 +220,10 @@ function updateTimerUI(left) {
   const ring = $('#ringFg');
   if (ring) ring.style.strokeDashoffset = String(97.4 * (1 - ratio));
   $('.stat-timer').classList.toggle('is-low', left <= 5 && left > 0);
+  if (left <= 5 && left > 0 && !state.lowWarned) {
+    state.lowWarned = true;
+    playSfx('timer_low');
+  }
 }
 
 async function handleTimeout() {
@@ -225,6 +250,7 @@ async function handleTimeout() {
 /* --------------------------------------------------------------- feedback */
 function showFeedback(fb, timeout = false) {
   const el = $('#feedback');
+  if (!timeout) playSfx(fb.benar ? 'answer_correct' : 'answer_wrong');
   el.classList.toggle('is-wrong', !fb.benar);
   el.classList.add('is-show');
   $('#fbIcon').textContent = fb.benar ? '✓' : '✕';
@@ -386,10 +412,12 @@ function handleStatus(msg) {
   if (cam.gesture) {
     gEl.textContent = cam.gesture;
     gEl.classList.add('is-live');
+    if (state.lastGestureSeen !== cam.gesture) playSfx('gesture_detected');
   } else {
     gEl.textContent = cam.handedness && cam.handedness !== 'None' ? '…' : '—';
     gEl.classList.remove('is-live');
   }
+  state.lastGestureSeen = cam.gesture || null;
 
   // Progress tahan
   const bar = $('#holdBar');
@@ -399,19 +427,43 @@ function handleStatus(msg) {
     bar.style.background = p >= 1 ? 'var(--ok)' : 'var(--red)';
   }
 
-  // Petunjuk kontekstual
+  // Petunjuk kontekstual: satu kode status dari backend -> satu kalimat.
   const note = $('#camNote');
-  if (note && cam.reason) {
-    if (!cam.handedness || cam.handedness === 'None') {
-      note.textContent = 'Arahkan tangan kanan ke kamera, ibu jari terlipat.';
-    } else {
-      note.textContent = cam.gesture
-        ? `Terbaca ${cam.gesture} — tahan posisi sampai penuh.`
-        : cam.reason;
+  if (note) {
+    const ditolak = cam.tangan_ditolak || {};
+    const nTolak = (ditolak.terlalu_kecil || 0) + (ditolak.luar_area || 0)
+      + (ditolak.skor_rendah || 0);
+    let txt;
+    switch (cam.status) {
+      case 'memori':
+        txt = 'Tanganmu hilang sesaat — tetap di posisi.';
+        break;
+      case 'tangan_kiri':
+        txt = 'Itu tangan kiri — gunakan tangan kanan.';
+        break;
+      case 'mengenali':
+        txt = `Gesture ${cam.gesture || ''} dikenali — tahan posisi.`.trim();
+        break;
+      case 'menahan':
+        txt = `Tahan ${cam.gesture || 'gerakan'} sampai meter penuh.`;
+        break;
+      case 'terkunci':
+        txt = 'Jawaban terkunci.';
+        break;
+      case 'belum_valid':
+        txt = cam.reason || 'Bentuk gesture belum sesuai A/B/C/D.';
+        break;
+      case 'tidak_ada':
+      default:
+        txt = nTolak > 0
+          ? `${nTolak} tangan diabaikan (terlalu jauh / di luar area) — maju mendekat.`
+          : 'Arahkan tangan kanan ke kamera, ibu jari terlipat.';
     }
+    note.textContent = txt;
   }
 
   // Feedback jawaban dari backend (jawaban terkunci di server)
+  if (msg.kunci) playSfx('answer_locked');
   if (msg.jawaban && !state.answered) {
     state.answered = true;
     state.locked = true;
@@ -524,6 +576,8 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#footerYear').textContent = `© ${new Date().getFullYear()} SMK Telkom Sidoarjo`;
 
   $('#btnStart').addEventListener('click', startGame);
+  const btnStartTop = $('#btnStartTop');
+  if (btnStartTop) btnStartTop.addEventListener('click', startGame);
   $('#btnReplay').addEventListener('click', replay);
   $('#btnHome').addEventListener('click', quitGame);
   $('#btnQuit').addEventListener('click', quitGame);
@@ -542,12 +596,41 @@ document.addEventListener('DOMContentLoaded', () => {
     opt.addEventListener('click', () => manualAnswer(opt.dataset.choice));
   });
 
+  // Foto hero: bila static server tidak memetakan assets/foto/ (mis. halaman
+  // dibuka lewat server statis lain), pakai route backend sebagai cadangan.
+  // Bila keduanya gagal (berkas belum ada di mesin ini), kartu foto tetap
+  // tampil rapi dengan keterangan — bukan ikon gambar rusak.
+  const heroPhoto = $('#heroPhoto');
+  if (heroPhoto) {
+    const gagalTotal = () => {
+      heroPhoto.style.display = 'none';
+      const frame = heroPhoto.closest('.hero-photo-frame');
+      if (frame && !frame.querySelector('.hero-photo-fallback')) {
+        const ph = document.createElement('div');
+        ph.className = 'hero-photo-fallback';
+        ph.textContent = 'Foto dokumentasi pameran belum tersedia di mesin ini.';
+        frame.appendChild(ph);
+      }
+    };
+    const fallbackHero = () => {
+      if (heroPhoto.dataset.fallback === '1') { gagalTotal(); return; }
+      heroPhoto.dataset.fallback = '1';
+      heroPhoto.src = `${API}/api/media/fotocontoh.png`;
+    };
+    heroPhoto.addEventListener('error', fallbackHero);
+    // Bila gambar sudah gagal SEBELUM listener terpasang, event error tidak
+    // akan terulang; periksa hasil muatnya langsung.
+    if (heroPhoto.complete && heroPhoto.naturalWidth === 0) fallbackHero();
+  }
+
   checkApi();
   setInterval(() => { if (state.screen === 'landing') checkApi(); }, 15000);
 
-  // Lepas kamera bila tab ditutup saat bermain.
+  // Lepas kamera bila tab ditutup saat kamera menyala (permainan MAUPUN sesi
+  // foto). Tanpa 'photo', menutup tab di tengah Photo Moment meninggalkan
+  // kamera terbuka sampai panitia menekan stop.
   window.addEventListener('pagehide', () => {
-    if (state.screen === 'game' || state.screen === 'battle') {
+    if (['game', 'battle', 'photo'].includes(state.screen)) {
       navigator.sendBeacon?.(`${API}/api/cv/stop`);
     }
   });

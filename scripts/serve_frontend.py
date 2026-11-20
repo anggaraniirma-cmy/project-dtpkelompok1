@@ -14,6 +14,7 @@ import http.server
 import json
 import mimetypes
 import os
+import re
 import socket
 import socketserver
 import sys
@@ -52,10 +53,38 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        # Foto dokumentasi: disajikan dari lokasi ASLINYA
+        # (backend/data/foto/) tanpa menyalin berkas ke folder frontend.
+        # Folder itu sengaja di-.gitignore (data pribadi pengunjung), jadi
+        # frontend tidak punya salinan foto sama sekali.
+        if path.startswith("/assets/foto/"):
+            if self._kirim_foto(path.rsplit("/", 1)[-1]):
+                return
         # SPA-ish: tanpa ekstensi -> index.html
         if "." not in Path(path).name:
             self.path = "/index.html"
         super().do_GET()
+
+    def _kirim_foto(self, nama: str) -> bool:
+        """Kirim satu foto dari backend/data/foto bila namanya sah."""
+        if not re.fullmatch(r"[0-9A-Za-z_.-]{3,80}\.(png|jpg|jpeg)", nama or ""):
+            return False
+        folder = (PROJECT_DIR / "backend" / "data" / "foto").resolve()
+        berkas = (folder / nama).resolve()
+        try:
+            berkas.relative_to(folder)      # cegah path traversal
+        except ValueError:
+            return False
+        if not berkas.is_file():
+            return False
+        tipe = mimetypes.guess_type(berkas.name)[0] or "application/octet-stream"
+        data = berkas.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", tipe)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+        return True
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")

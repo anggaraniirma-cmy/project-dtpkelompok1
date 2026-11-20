@@ -10,6 +10,19 @@
   const WS_URL = API.replace(/^http/, 'ws') + '/api/cv/ws/battle';
   const $ = (s) => document.querySelector(s);
 
+  /* Satu kode status dari backend -> satu label + satu nada warna.
+     Kode berasal dari VisionPipeline._kode_status (backend/app/cv/pipeline.py). */
+  const STATUS_LABEL = {
+    tidak_ada:   { badge: 'BELUM TERDETEKSI', tone: 'warn', note: 'Tangan belum terdeteksi di zona ini.' },
+    memori:      { badge: 'HILANG SESAAT',   tone: 'warn', note: 'Tangan hilang sesaat — tetap di posisi.' },
+    zona_salah:  { badge: 'DI LUAR ZONA',    tone: 'warn', note: 'Berdiri di zona yang benar.' },
+    tangan_kiri: { badge: 'TANGAN KIRI',     tone: 'warn', note: 'Gunakan tangan kanan.' },
+    belum_valid: { badge: 'BELUM VALID',     tone: 'dim',  note: 'Bentuk gesture belum sesuai A/B/C/D.' },
+    mengenali:   { badge: 'DIKENALI',        tone: 'ok',   note: 'Gesture dikenali — tahan posisi.' },
+    menahan:     { badge: 'STABIL',          tone: 'ok',   note: 'Tahan sampai penuh untuk mengunci.' },
+    terkunci:    { badge: 'TERKUNCI',        tone: 'locked', note: 'Jawaban terkunci.' },
+  };
+
   const B = {
     ws: null,
     wsRetry: 0,
@@ -24,7 +37,15 @@
     manualMode: false,
     manualAllowed: true,
     result: null,
+    lowWarned: false,
+    lastGesture: { 1: null, 2: null },
   };
+
+  function playSfx(nama) {
+    try {
+      if (window.skomdaSfx) window.skomdaSfx.play(nama);
+    } catch (_) { /* audio tidak boleh mengganggu permainan */ }
+  }
 
   function toast(msg, isError) {
     if (window.skomdaToast) return window.skomdaToast(msg, isError);
@@ -63,10 +84,12 @@
   /* ------------------------------------------------------------- start */
   async function startBattle() {
     const btn = $('#btnStartBattle');
-    const label = btn.querySelector('span');
-    const original = label.textContent;
-    btn.disabled = true;
-    label.textContent = 'MENYIAPKAN…';
+    const label = btn ? btn.querySelector('span') : null;
+    const original = label ? label.textContent : '';
+    // Gesture pengguna: buka audio (tidak ada autoplay sebelum klik).
+    if (window.skomdaSfx) window.skomdaSfx.unlock();
+    if (btn) btn.disabled = true;
+    if (label) label.textContent = 'MENYIAPKAN…';
     try {
       // Kamera dulu, mode battle -> MediaPipe diminta mendeteksi 2 tangan.
       const cam = await api('/api/cv/start?mode=battle', { method: 'POST' }).catch((e) => {
@@ -86,11 +109,12 @@
       renderBattleQuestion(gs);
       if (cam) startBattleStream();
       connectBattleWs();
+      playSfx('game_start');
     } catch (err) {
       toast(err.message, true);
     } finally {
-      btn.disabled = false;
-      label.textContent = original;
+      if (btn) btn.disabled = false;
+      if (label) label.textContent = original;
     }
   }
 
@@ -117,10 +141,17 @@
   function renderBattleQuestion(gs) {
     if (!gs || !gs.soal) return;
     const soal = gs.soal;
+    const nomorSebelumnya = B.lastIndex;
     B.answered = { 1: false, 2: false };
     B.duration = soal.durasi || 30;
     B.deadline = performance.now() + B.duration * 1000;
     B.lastIndex = gs.nomor;
+    B.lowWarned = false;
+    B.lastGesture = { 1: null, 2: null };
+
+    if (nomorSebelumnya !== gs.nomor) {
+      playSfx(gs.nomor === 1 ? 'question_appear' : 'question_change');
+    }
 
     $('#bKategori').textContent = soal.kategori || 'UMUM';
     $('#bIndex').textContent = `SOAL ${String(gs.nomor).padStart(2, '0')}`;
@@ -187,6 +218,10 @@
       // mode single player yang juga ada di halaman ini.
       const stat = document.querySelector('#screen-battle .stat-timer');
       if (stat) stat.classList.toggle('is-low', left <= 5 && left > 0);
+      if (left <= 5 && left > 0 && !B.lowWarned) {
+        B.lowWarned = true;
+        playSfx('timer_low');
+      }
       if (left <= 0) {
         clearInterval(B.timerHandle);
         // Waktu habis ditangani server (game_event). Browser hanya berhenti.
@@ -263,6 +298,7 @@
       const gEl = $(`#bGesture${n}`);
       const noteEl = $(`#bNote${n}`);
       const barEl = $(`#bHold${n}`);
+      const badgeEl = $(`#bBadge${n}`);
       if (gEl) {
         gEl.textContent = p.gesture || (p.terdeteksi ? '…' : '—');
         gEl.style.color = p.gesture ? '' : 'var(--slate-400)';
@@ -271,29 +307,51 @@
         const prog = Math.max(0, Math.min(1, p.progress || 0));
         barEl.style.width = `${prog * 100}%`;
       }
+      // Indikator status: satu kode dari backend -> satu label yang jelas.
+      const info = STATUS_LABEL[p.status] || STATUS_LABEL.belum_valid;
+      if (badgeEl) {
+        badgeEl.textContent = info.badge;
+        badgeEl.className = `bp-badge is-${info.tone}`;
+      }
+      // Bunyi saat gesture mulai dikenali (bukan setiap frame — dibatasi SFX).
+      if (p.gesture && B.lastGesture[n] !== p.gesture) playSfx('gesture_detected');
+      B.lastGesture[n] = p.gesture || null;
       if (noteEl) {
-        let txt = p.reason || '';
-        let warn = false;
-        if (!p.terdeteksi) {
-          txt = 'Tangan belum terdeteksi di zona ini.';
-          warn = true;
-        } else if (p.zona_ok === false) {
+        let txt = info.note;
+        let warn = info.tone === 'warn';
+        if (p.status === 'belum_valid' && p.reason) txt = p.reason;
+        if (p.status === 'zona_salah') {
           txt = `Tangan di luar zona — geser ke ${n === 1 ? 'KIRI' : 'KANAN'}.`;
-          warn = true;
-        } else if (p.gesture) {
-          txt = `Terbaca ${p.gesture} — tahan sampai penuh.`;
+        }
+        if (p.status === 'menahan' || p.status === 'mengenali') {
+          txt = `Terbaca ${p.gesture || '…'} — tahan sampai penuh.`;
+        }
+        if (p.status === 'terkunci') {
+          txt = `Jawaban ${p.gesture || ''} terkunci.`.trim();
         }
         noteEl.textContent = txt;
         noteEl.classList.toggle('is-warn', warn);
+        noteEl.classList.toggle('is-ok', info.tone === 'ok');
       }
     });
 
-    if (Array.isArray(cam.peringatan) && cam.peringatan.length) {
-      const note = $('#bCamNote');
-      if (note) {
-        note.textContent = cam.peringatan[0];
-        note.classList.add('is-warn');
+    // Catatan kamera: peringatan pemain ATAU tangan yang diabaikan filter.
+    const note = $('#bCamNote');
+    if (note) {
+      const ditolak = cam.tangan_ditolak || {};
+      const nTolak = (ditolak.terlalu_kecil || 0) + (ditolak.luar_area || 0)
+        + (ditolak.skor_rendah || 0);
+      let txt = 'Player 1 di zona kiri, Player 2 di zona kanan. Keduanya tangan kanan.';
+      let warn = false;
+      if (Array.isArray(cam.peringatan) && cam.peringatan.length) {
+        txt = cam.peringatan[0];
+        warn = true;
+      } else if (nTolak > 0) {
+        txt = `${nTolak} tangan diabaikan (terlalu jauh / di luar area permainan).`;
+        warn = true;
       }
+      note.textContent = txt;
+      note.classList.toggle('is-warn', warn);
     }
 
     // Game state: skor & status jawaban (sumber kebenaran = server).
@@ -329,6 +387,7 @@
     }
 
     // Jawaban yang baru terkunci (per pemain).
+    if (msg.kunci) playSfx('answer_locked');
     if (msg.jawaban) {
       Object.keys(msg.jawaban).forEach((key) => {
         applyBattleFeedback(Number(key), msg.jawaban[key]);
@@ -341,6 +400,7 @@
   function applyBattleFeedback(n, fb) {
     if (!fb || B.answered[n]) return;
     B.answered[n] = true;
+    playSfx(fb.benar ? 'answer_correct' : 'answer_wrong');
     setPlayerState(n, 'Terkunci', true);
     const panel = $(`#bPanel${n}`);
     if (panel) panel.classList.add('is-locked');
@@ -458,10 +518,12 @@
     if (hasil.seri) {
       status.textContent = 'SERI — skor kedua pemain sama.';
       status.classList.add('is-draw');
+      playSfx('draw');
     } else {
       const p = hasil.pemain[String(hasil.pemenang)] || hasil.pemain[hasil.pemenang];
       status.textContent = `${p.nama} MENANG dengan ${p.skor} poin!`;
       status.classList.add('is-win');
+      playSfx('player_win');
     }
 
     showScreen('battle-result');

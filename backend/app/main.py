@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 
 from . import __version__, config, database
 from .game import battle, engine
-from .routers import admin, auth, battle as battle_router, cv, game, galeri
+from .routers import admin, auth, battle as battle_router, cv, game, galeri, media
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("skomda")
@@ -91,6 +91,7 @@ app.include_router(game.router)
 app.include_router(battle_router.router)
 app.include_router(cv.router)
 app.include_router(galeri.router)
+app.include_router(media.router)
 
 
 @app.get("/api/health")
